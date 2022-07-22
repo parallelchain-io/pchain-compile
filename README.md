@@ -20,3 +20,4 @@ SUBCOMMANDS:
 ```
 
 For more information on `pchain_compile` and how it has been developed, please visit its official documentation page [here](https://docs.parallelchain.io/smart_contract_sdk/build_contract/).
+

@@ -1,0 +1,18 @@
+[package]
+name = "pchain_compile"
+version = "1.1.0"
+edition = "2021"
+
+[[bin]]
+name = "pchain_compile"
+
+[dependencies]
+clap = {version = "3.1.5", features = ["derive"]}
+cargo_toml = "0.11.5"
+dunce = "1.0.2"
+faccess = "0.2.4"
+rand = "0.6.0"
+thiserror = "1.0.31"
+tokio = {version = "1.19", features = ["full"]}
+wasm-snip = "0.4.0"
+
