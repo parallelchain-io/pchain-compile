@@ -1,3 +1,19 @@
+/*
+ Copyright (c) 2022 ParallelChain Lab
+ 
+ This program is free software: you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+ 
+ You should have received a copy of the GNU General Public License
+ along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
 use cargo_toml::Manifest;
 use dunce;
 use faccess::{AccessMode, PathExt};
@@ -10,27 +26,39 @@ pub(crate) struct Processes {
     container_name: String,
 }
 
-impl Drop for Processes{
+impl Drop for Processes {
     fn drop(&mut self) {
-        for p in &mut self.children{
-            match p.try_wait(){
+        for p in &mut self.children {
+            match p.try_wait() {
                 Ok(exit_status) => {
-                    if exit_status.is_none(){
+                    if exit_status.is_none() {
                         match p.kill() {
-                            Err(e) => println!("Could not kill child process: {}", e),
-                            Ok(_) => {},
+                            Err(e) => {
+                                println!("Could not kill child process: {}", e)
+                            },
+                            Ok(_) => {
+                                println!("Killed child process successfully.")
+                            },
                         }
                     }
                 },
-                Err(e) => println!("error attempting to wait: {}", e)
+                Err(e) => {
+                    println!("Error attempting to wait: {}", e)
+                },
             }
         }
 
         let (path_to_shell ,option, suppress_output)  = match cfg!(target_os = "windows") {
-            false => ("/bin/bash", "-c", ">/dev/null"),
-            true =>  ("cmd", "/C", ">nul"),
+            false => {
+                ("/bin/bash", "-c", ">/dev/null")
+            },
+            true =>  {
+                ("cmd", "/C", ">nul")
+            },
         }; 
-        
+
+        println!("Cleanup in progress. Please do not press Ctrl+C...");
+
         match Command::new(path_to_shell)
             .arg(option)
             .arg(&format!("docker stop {container} {silence} && \
@@ -38,41 +66,61 @@ impl Drop for Processes{
             .status() {
                 Ok(p) => {
                    match p.success() {
-                        true =>  {}, 
-                        false => println!("Docker container '{}' cannot be stopped and removed.", self.container_name),
+                        true => {
+                            println!("All artifacts from pchain-compile have been successfully stopped and removed.")
+                        }, 
+                        false => {
+                            println!("Docker container '{}' cannot be stopped and removed.", self.container_name)
+                        },
                     }; 
                 },
-                Err(_) => println!("Docker container '{}' cannot be stopped and removed.", self.container_name),
+                Err(_) => {
+                    println!("Docker container '{}' cannot be stopped and removed.", self.container_name)
+                },
         }; 
     }
 }
 
-// build takes the path to the cargo manifest file, generates an optimized WASM binary after building
+// `build` takes the path to the cargo manifest file, generates an optimized WASM binary after building
 // the source code and saves it to the designated destination_path.
 pub async fn build(manifest_path:String, destination_path:String) -> Result<String, ProcessExitCode> {
     // create destination directory if it does not exist   
     match fs::create_dir_all(destination_path.to_owned()) {
-        Ok(m) => {m},
-        Err(_) => {return Err(ProcessExitCode::InvalidPath);}
+        Ok(dir) => {
+            dir
+        },
+        Err(_) => {
+            return Err(ProcessExitCode::InvalidPath);
+        },
     };
 
     // get absolute path to the destination directory
     // also check if destination path has write privileges.
     let absolute_destination_path = match dunce::canonicalize(destination_path) {
-        Ok(m) => {
-            let write_path = match m.access(AccessMode::WRITE) {
-                Ok(_)  => {String::from(m.to_string_lossy())},
-                Err(_) =>{return Err(ProcessExitCode::InvalidPath);},
+        Ok(dir) => {
+            let write_path = match dir.access(AccessMode::WRITE) {
+                Ok(_)  => {
+                    String::from(dir.to_string_lossy())
+                },
+                Err(_) =>{
+                    return Err(ProcessExitCode::InvalidPath);
+                },
             };
             write_path
         },
-        Err(_) => {return Err(ProcessExitCode::Unknown);}
+        Err(_) => {
+            return Err(ProcessExitCode::Unknown);
+        }
     };
 
     // check if the manifest file exists on the path supplied   
     let manifest_file = match Manifest::from_path(format!("{}{}", &manifest_path, &"/Cargo.toml")) {
-        Ok(f) => {f},
-        Err(_) => {return Err(ProcessExitCode::ManifestFailure);},
+        Ok(manifest) => {
+            manifest
+        },
+        Err(_) => {
+            return Err(ProcessExitCode::ManifestFailure);
+        },
     };
 
     // retrieve the package name from the manifest file and append the extension to package name.
@@ -100,27 +148,32 @@ pub async fn build(manifest_path:String, destination_path:String) -> Result<Stri
     
     // pull latest pchain_compile image from DockerHub.
     // run the image as a container with name <container_name>.   
-    if let Ok(mut process1) = Command::new(path_to_shell)
+    if let Ok(mut process_docker) = Command::new(path_to_shell)
     .arg(option)
     .arg(&format!("docker pull parallelchainlab/pchain_compile:latest {silence} && \
                    docker run -it -d --name {container} parallelchainlab/pchain_compile:latest {silence}", container=container_name, silence=&suppress_output.to_owned()))
-    .spawn()
-    {
-        match process1.wait() {
+    .spawn() {
+        match process_docker.wait() {
             Ok(status) => {
-                child_process.children.push(process1);
+                child_process.children.push(process_docker);
 
                 match status.success() {
-                    true => { status }, 
+                    true => { 
+                        status 
+                    }, 
                     // process got terminated with non-zero ExitStatus. Sources of error DockerHub, docker service closed
-                    false => return Err(ProcessExitCode::DockerDaemonFailure),
+                    false => { 
+                        return Err(ProcessExitCode::DockerDaemonFailure) 
+                    },
                 }; 
             },
             // should never reach here
-            Err(_) => return Err(ProcessExitCode::Unknown),
+            Err(_) => { 
+                unreachable!() 
+            },
         };
     }
-    else{
+    else {
         return Err(ProcessExitCode::DockerDaemonFailure)
     };
     
@@ -128,7 +181,7 @@ pub async fn build(manifest_path:String, destination_path:String) -> Result<Stri
     // build the docker container, run the container, copy the source code inside the container,
     // execute cargo build inside the container to generate the WASM binary, use wasm-opt and wasm-snip to optimize the file,
     // move the file from the container to the destination path and remove the container.                                                 
-    if let Ok(mut process2) = Command::new(path_to_shell).arg(option)
+    if let Ok(mut process_build) = Command::new(path_to_shell).arg(option)
         .arg(&format!("docker cp {manifest}/. {container}:/home/ {silence} && \
                        docker exec -w /home/ {container} cargo build --target wasm32-unknown-unknown --release {silence} && \
                        docker exec -w /home/target/wasm32-unknown-unknown/release {container} chmod +x /root/bin/wasm-opt {silence} && \
@@ -136,21 +189,25 @@ pub async fn build(manifest_path:String, destination_path:String) -> Result<Stri
                        docker exec -w /home/target/wasm32-unknown-unknown/release {container} wasm-snip temp.wasm --output temp2.wasm --snip-rust-fmt-code --snip-rust-panicking-code {silence} && \
                        docker exec -w /home/target/wasm32-unknown-unknown/release {container} /root/bin/wasm-opt --dce temp2.wasm --output optimized.wasm {silence} && \
                        docker exec -w /home/target/wasm32-unknown-unknown/release {container} mv optimized.wasm /home/{wasm} {silence} && \
-                       docker cp {container}:/home/{wasm} {destination} {silence} ", container=&container_name.to_owned(), manifest=&manifest_path.to_owned(), wasm=&wasm_file.to_owned(), destination=&absolute_destination_path.to_owned(), silence=&suppress_output.to_owned()))
-        .spawn()
-    {
-        match process2.wait() {
+                       docker cp {container}:/home/{wasm} {destination} {silence} ", container=&container_name, manifest=&manifest_path, wasm=&wasm_file, destination=&absolute_destination_path, silence=&suppress_output))
+        .spawn() {
+        match process_build.wait() {
             Ok(status) => {
-                child_process.children.push(process2);
-
+                child_process.children.push(process_build);
                 match status.success() {
-                    true => { status }, 
+                    true => { 
+                        status 
+                    }, 
                     // process got terminated with non-zero ExitStatus. Sources of error build failure,external process,software interrupts  
-                    false => return Err(ProcessExitCode::BuildFailure),
+                    false => { 
+                        return Err(ProcessExitCode::BuildFailure)
+                    },
                 }; 
             },
             // should never reach here
-            Err(_) => return Err(ProcessExitCode::Unknown),
+            Err(_) => {
+                unreachable!() 
+            }
         };
     }
     else{
@@ -193,3 +250,4 @@ pub enum ProcessExitCode {
     #[error("Process Failure Unknown")]
     Unknown,
 }
+
