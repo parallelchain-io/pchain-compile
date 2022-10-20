@@ -1,3 +1,19 @@
+/*
+ Copyright (c) 2022 ParallelChain Lab
+ 
+ This program is free software: you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ 
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+ 
+ You should have received a copy of the GNU General Public License
+ along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
 pub mod operations;
 
 use clap::Parser;
@@ -53,6 +69,7 @@ async fn main() {
                         ProcessExitCode::DockerDaemonFailure => {"Failed to compile.\nDetails: Docker Daemon Failure. Check if Docker is running on your machine and confirm read/write access privileges."},
                         ProcessExitCode::ManifestFailure => {"Failed to compile.\nDetails: Manifest File Not Found. Check if you have provided the correct path to your source code and confirm read access privileges."},
                         ProcessExitCode::InvalidPath => {"Failed to compile.\nDetails: Destination Path Not Valid. Check if you have provided the correct path to save your optimized WASM binary and confirm write access privileges."},
+                        ProcessExitCode::InvalidFilePath => {"Failed to compile.\nDetails: pchain-compile does not support file paths with blank spaces at present. Please change your file path and compile your contract again."},
                         ProcessExitCode::Unknown => {"Failed to compile.\nDetails: Unknown error. If this persists after a system restart, please lodge an issue on pchain_compile's GitHub."},
                     };
                     exit_result.to_string()

@@ -113,6 +113,10 @@ pub async fn build(manifest_path:String, destination_path:String) -> Result<Stri
         }
     };
 
+    if manifest_path.contains(" ") {
+       return Err(ProcessExitCode::InvalidFilePath);
+    }
+
     // check if the manifest file exists on the path supplied   
     let manifest_file = match Manifest::from_path(format!("{}{}", &manifest_path, &"/Cargo.toml")) {
         Ok(manifest) => {
@@ -124,8 +128,8 @@ pub async fn build(manifest_path:String, destination_path:String) -> Result<Stri
     };
 
     // retrieve the package name from the manifest file and append the extension to package name.
-    let wasm_file = format!("{}{}", &(manifest_file.package.as_ref().unwrap()).name, &".wasm");
-    
+    let wasm_file = format!("{}{}", &(manifest_file.package.as_ref().unwrap()).name, &".wasm").replace("-", "_");
+
     // generate random string for container name.
     // This makes the build process shell agnostic
     let container_name = get_random_string();
@@ -246,6 +250,9 @@ pub enum ProcessExitCode {
 
     #[error("Destination path not found")]
     InvalidPath,
+
+    #[error("Blank spaces present in absolute file path")]
+    InvalidFilePath,
 
     #[error("Process Failure Unknown")]
     Unknown,
