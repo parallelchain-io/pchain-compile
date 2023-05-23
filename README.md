@@ -1,23 +1,52 @@
-# ParallelChain F pchain_compile CLI
+# ParallelChain Mainnet Contract Compiler (pchain_compile) 
 
-`pchain_compile` is an easy-to-use, fully-featured CLI for building smart contracts for deployment on ParallelChain F. For a detailed description of all of pchain_compile's available commands, execute `pchain_compile --help`. You should see something like this printed out:
+`pchain_compile` is a command line tool for reproducibly building Rust code into compact, gas-efficient WebAssembly [ParallelChain Mainnet Smart Contracts](https://github.com/parallelchain-io/parallelchain-protocol/blob/master/Contracts.md).
 
+## Pre-Requisites
+
+`pchain_compile` builds the source code in a docker environment. To know more about Docker and install it, refer to the [official instructions](https://docs.docker.com/get-docker/).
+
+## Build the Source Code 
+
+Suppose you have the source code of smart contract in the folder `contract` under your home directory. 
+
+```text
+/home/
+|- user/
+   |- contract/
+      |- src/
+         |- lib.rs
+      |- Cargo.toml
 ```
-pchain_compile 1.1
-<ParallelChain Lab>
-ParallelChain F Smart Contract Compile CLI
 
-USAGE:
-    pchain_compile <SUBCOMMAND>
+To build smart contract into WebAssembly bytecode (file extension `.wasm`), you can simply run the program by specifying the arguments **source** and **destination**.
 
-OPTIONS:
-    -h, --help       Print help information
-    -V, --version    Print version information
+On a Linux Bash Shell:
+      
+```sh
+$ ./pchain_compile build --source /home/user/contract --destination /home/user/result
+Build process started. This could take several minutes for large contracts.
 
-SUBCOMMANDS:
-    build    build the source code
-    help     Print this message or the help of the given subcommand(s)
+Finished compiling. ParallelChain Mainnet smart contract(s) ["contract.wasm"] are saved at (/home/user/result).
 ```
 
-For more information on `pchain_compile` and how it has been developed, please visit its official documentation page [here](https://docs.parallelchain.io/smart_contract_sdk/build_contract/).
+On a Windows Shell:
+```powershell
+$ .\pchain_compile.exe build --source 'C:\Users\user\contract' --destination 'C:\Users\user\result'
+Build process started. This could take several minutes for large contracts.
+
+Finished compiling. ParallelChain Mainnet smart contract(s) ["contract.wasm"] are saved at (C:\Users\user\result).
+```
+
+Explanation about the command and its arguments can be displayed by appending "help" or "--help" to `pchain_compile`.
+
+## Toolchain
+
+The components described in the table below constitute the build toolchain for smart contract deployment on ParallelChain Mainnet. The toolchain is a [docker image](docker_image) hosted on a public DockerHub repository of ParallelChain see [here](https://hub.docker.com/r/parallelchainlab/pchain_compile),which is pulled in when `pchain_compile` is executed and removed at the end of the lifetime of the program. 
+     
+|Toolchain Component | Utility
+|:---                | :--- |
+rustc                | Compiler for Rust. |
+wasm-snip (0.4.0) | WASM utility which removes functions that are never called at runtime. |   
+wasm-opt  (109)  | WASM utility to load WebAssembly in text format and run Binaryen IR passes to optimize its size. For more information on Binaryen IR see [here](http://webassembly.github.io/binaryen/). |
 

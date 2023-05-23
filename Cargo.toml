@@ -1,7 +1,10 @@
 [package]
 name = "pchain_compile"
-version = "1.1.0"
+version = "2.0.0"
+authors = ["ParallelChain Lab <info@parallelchain.io>"]
 edition = "2021"
+description = "ParallelChain Smart Contract Compile CLI - A command line tool for compiling ParallelChain Smart Contract."
+license = "Apache-2.0"
 
 [[bin]]
 name = "pchain_compile"

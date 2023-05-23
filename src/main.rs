@@ -1,82 +1,95 @@
 /*
- Copyright (c) 2022 ParallelChain Lab
- 
- This program is free software: you can redistribute it and/or modify
- it under the terms of the GNU General Public License as published by
- the Free Software Foundation, either version 3 of the License, or
- (at your option) any later version.
- 
- This program is distributed in the hope that it will be useful,
- but WITHOUT ANY WARRANTY; without even the implied warranty of
- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- GNU General Public License for more details.
- 
- You should have received a copy of the GNU General Public License
- along with this program.  If not, see <https://www.gnu.org/licenses/>.
+    Copyright © 2023, ParallelChain Lab 
+    Licensed under the Apache License, Version 2.0: http://www.apache.org/licenses/LICENSE-2.0
 */
-pub mod operations;
 
-use clap::Parser;
-use operations::{build, ProcessExitCode};
+//! `pchain_compile` is a command line interface tool to build ParallelChain Smart Contract that can be deployed to
+//! ParallelChain Mainnet. It takes a ParallelChain Smart Contract which is written in Rust, and then builds by Cargo
+//! in a docker environment. 
+
 use std::env;
+use clap::Parser;
 
-// ParallelChain F Smart Contract Build CLI.
-// The `main` is responsible to parse user request and build the supplied contract code. 
+pub mod build;
+use build::build_target;
+
+pub mod processes;
+use processes::ProcessExitCode;
+
 #[derive(Debug, Parser)]
-#[clap(name = "pchain_compile")]
-#[clap(version = "1.1.0", about = "ParallelChain F Smart Contract Compile CLI", author = "<ParallelChain Lab>", long_about = None)]
+#[clap(
+    name = "pchain-compile",
+    version = "2.0.0", 
+    about = "ParallelChain Smart Contract Compile CLI\n\n\
+             A command line tool for reproducibly building Rust code into compact, gas-efficient WebAssembly ParallelChain Smart Contract.", 
+    author = "<ParallelChain Lab>", 
+    long_about = None
+)]
+/// asdasdasd
 enum PchainCompile {
-    /// build the source code.
-    #[clap(arg_required_else_help = false, display_order=1)]
+    /// Build the source code. Please make sure:
+    /// 1. Docker is installed and its execution permission under current user is granted.
+    /// 2. Internet is reachable. (for pulling the docker image from docker hub)
+    #[clap(arg_required_else_help = false, display_order=1, verbatim_doc_comment)]
     Build {
-        /// Path to the source code directory 
-        #[clap(long="source", display_order=1)]
-        manifest_path : String,
-        /// Path to the compiled optimized wasm file 
-        #[clap(long="destination", display_order=2)]
+        /// Path to the source code directory.
+        /// 1. The path to the source code of the ParallelChain Mainnet smart contract. 
+        /// 2. This is a *mandatory* field.
+        /// 3. If "." is passed to the source field the path will be set to the current working. directory. 
+        #[clap(long="source", display_order=1, verbatim_doc_comment)]
+        source_path : String,
+        /// Path to the compiled optimized wasm file. 
+        /// 1. The path where the resulting WASM smart contract with the name <package_name>.wasm will be stored. package_name is the name of the package denoted in the manifest file of the source code directory. 
+        /// 2. This is an *optional* field. pchain_compile saves the generated wasm file to the **source** path if this flag is not supplied.
+        /// 3. If "." is passed to the destination field the destination path will be set to the current working directory. 
+        #[clap(long="destination", display_order=2, verbatim_doc_comment)]
         destination_path : Option<String>,
     },
 }
-
-// This maps the argument collection to the corresponding handling build function
+ 
 #[tokio::main]
 async fn main() {
     let args = PchainCompile::parse();
     match args {
-        PchainCompile::Build { mut manifest_path, destination_path} => {
-            // check the current path of the pchain_compile binary
-            let working_directory = env::current_dir().unwrap();
-            let path: String = String::from(working_directory.to_string_lossy());
-            
-            if manifest_path.to_lowercase() == "." { manifest_path = path.clone(); };
-            
+        PchainCompile::Build { source_path, destination_path } => {
+            let path: String = String::from(env::current_dir().unwrap().to_string_lossy());
+            let patterns : &[_] = &['~', '!', '"', '/'];
+
+            let mut source_path = String::from(source_path.trim_end_matches(patterns));
+            if source_path.to_lowercase() == "." { 
+                source_path = path.clone();
+            }
+
             let destination = match destination_path {
-                Some(d) => {
-                    match d.to_lowercase().as_ref() {
-                        "." => {path.clone()},
-                        _ => {d},
+                Some(dir) => {
+                    match dir.to_lowercase().as_ref() {
+                        "." => path,
+                        _ => dir,
                     }
                 },
-                None => {path.clone()},
+                None => path,
             };
 
-            let result  = match build(manifest_path, destination).await {
-                Ok(m) => {m},
-                Err(e) => {
-                    let exit_result = match e { 
-                        ProcessExitCode::ArtifactRemovalFailure => {"The compilation was successful, but pchain_compile failed to stop its Docker containers. Please remove them manually."}, 
-                        ProcessExitCode::BuildFailure => {"Failed to compile.\nDetails: Check your source code or command line arguments for errors."}, 
-                        ProcessExitCode::DockerDaemonFailure => {"Failed to compile.\nDetails: Docker Daemon Failure. Check if Docker is running on your machine and confirm read/write access privileges."},
-                        ProcessExitCode::ManifestFailure => {"Failed to compile.\nDetails: Manifest File Not Found. Check if you have provided the correct path to your source code and confirm read access privileges."},
-                        ProcessExitCode::InvalidPath => {"Failed to compile.\nDetails: Destination Path Not Valid. Check if you have provided the correct path to save your optimized WASM binary and confirm write access privileges."},
-                        ProcessExitCode::InvalidFilePath => {"Failed to compile.\nDetails: pchain-compile does not support file paths with blank spaces at present. Please change your file path and compile your contract again."},
-                        ProcessExitCode::Unknown => {"Failed to compile.\nDetails: Unknown error. If this persists after a system restart, please lodge an issue on pchain_compile's GitHub."},
-                    };
-                    exit_result.to_string()
-                },
+            let result: String = match build_target(&source_path, &destination).await {
+                Ok(res) => res,
+                Err(e) => match_error(e).to_string(),
             };
-            println!("{}", result.to_string());
-        }
+
+            println!("{}", result);
+        },
     };
 }
 
+
+/// match_error matches ProcessExitCode 
+fn match_error(error: ProcessExitCode) -> &'static str {
+    match error { 
+        ProcessExitCode::ArtifactRemovalFailure => "The compilation was successful, but pchain-compile failed to stop its Docker containers. Please remove them manually.", 
+        ProcessExitCode::BuildFailure(e) => Box::leak(format!("\nDetails: {}. Please rectify the errors and build your source code again.", &e).into_boxed_str()),        
+        ProcessExitCode::DockerDaemonFailure => "Failed to compile.\nDetails: Docker Daemon Failure. Check if Docker is running on your machine and confirm read/write access privileges.",
+        ProcessExitCode::ManifestFailure => "Failed to compile.\nDetails: Manifest File Not Found. Check if the manifest file exists on the source code path.",
+        ProcessExitCode::InvalidSourcePath => "Failed to compile.\nDetails: Source Code Path Not Valid. Check if you have provided the correct path to your source code directory and confirm write access privileges.",
+        ProcessExitCode::InvalidDestinationPath => "\nDetails: Destination Path Not Valid. Check if you have provided the correct path to save your optimized WASM binary and confirm write access privileges.",
+        ProcessExitCode::InvalidDependenecyPath => "\nDetails: Dependency Paths specified within Smart Contract Crate Not Valid. Check if you have provided the correct path to the dependencies on your source",
+    }
+}
