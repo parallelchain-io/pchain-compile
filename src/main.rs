@@ -19,7 +19,7 @@ use processes::ProcessExitCode;
 #[derive(Debug, Parser)]
 #[clap(
     name = "pchain-compile",
-    version = "2.0.0", 
+    version = "0.4.0", 
     about = "ParallelChain Smart Contract Compile CLI\n\n\
              A command line tool for reproducibly building Rust code into compact, gas-efficient WebAssembly ParallelChain Smart Contract.", 
     author = "<ParallelChain Lab>", 

@@ -1,6 +1,6 @@
 [package]
 name = "pchain_compile"
-version = "2.0.0"
+version = "0.4.0"
 authors = ["ParallelChain Lab <info@parallelchain.io>"]
 edition = "2021"
 description = "ParallelChain Smart Contract Compile CLI - A command line tool for compiling ParallelChain Smart Contract."
