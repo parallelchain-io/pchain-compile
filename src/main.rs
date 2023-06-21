@@ -32,16 +32,10 @@ enum PchainCompile {
     /// 2. Internet is reachable. (for pulling the docker image from docker hub)
     #[clap(arg_required_else_help = false, display_order=1, verbatim_doc_comment)]
     Build {
-        /// Path to the source code directory.
-        /// 1. The path to the source code of the ParallelChain Mainnet smart contract. 
-        /// 2. This is a *mandatory* field.
-        /// 3. If "." is passed to the source field the path will be set to the current working. directory. 
+        /// Absolute/Relative path to the source code directory.
         #[clap(long="source", display_order=1, verbatim_doc_comment)]
         source_path : String,
-        /// Path to the compiled optimized wasm file. 
-        /// 1. The path where the resulting WASM smart contract with the name <package_name>.wasm will be stored. package_name is the name of the package denoted in the manifest file of the source code directory. 
-        /// 2. This is an *optional* field. pchain_compile saves the generated wasm file to the **source** path if this flag is not supplied.
-        /// 3. If "." is passed to the destination field the destination path will be set to the current working directory. 
+        /// Absolute/Relative path for saving the compiled optimized wasm file. 
         #[clap(long="destination", display_order=2, verbatim_doc_comment)]
         destination_path : Option<String>,
     },

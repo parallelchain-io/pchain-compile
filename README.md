@@ -42,7 +42,7 @@ Explanation about the command and its arguments can be displayed by appending "h
 
 ## Toolchain
 
-The components described in the table below constitute the build toolchain for smart contract deployment on ParallelChain Mainnet. The toolchain is a [docker image](docker_image) hosted on a public DockerHub repository of ParallelChain see [here](https://hub.docker.com/r/parallelchainlab/pchain_compile),which is pulled in when `pchain_compile` is executed and removed at the end of the lifetime of the program. 
+`pchain_compile` utilizes a docker_image hosted on a public DockerHub repository of ParallelChain see [here](https://hub.docker.com/r/parallelchainlab/pchain_compile) for the build process. The docker image utilizes a toolchain whose components are shown below in the following table below:-
      
 |Toolchain Component | Utility
 |:---                | :--- |
