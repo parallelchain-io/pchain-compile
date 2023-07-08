@@ -1,6 +1,6 @@
 [package]
 name = "pchain_compile"
-version = "0.4.0"
+version = "0.4.1"
 authors = ["ParallelChain Lab <info@parallelchain.io>"]
 edition = "2021"
 description = "ParallelChain Smart Contract Compile CLI - A command line tool for compiling ParallelChain Smart Contract."
@@ -10,6 +10,7 @@ license = "Apache-2.0"
 name = "pchain_compile"
 
 [dependencies]
+bollard = "0.14.0"
 clap = {version = "3.1.5", features = ["derive"]}
 cargo_toml = "0.11.5"
 dunce = "1.0.2"
@@ -18,4 +19,6 @@ rand = "0.6.0"
 thiserror = "1.0.31"
 tokio = {version = "1.19", features = ["full"]}
 wasm-snip = "0.4.0"
-
+futures-util = "0.3.28"
+flate2 = "1.0.26"
+tar = "0.4.38"
