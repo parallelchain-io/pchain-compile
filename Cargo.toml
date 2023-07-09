@@ -5,6 +5,11 @@ authors = ["ParallelChain Lab <info@parallelchain.io>"]
 edition = "2021"
 description = "ParallelChain Smart Contract Compile CLI - A command line tool for compiling ParallelChain Smart Contract."
 license = "Apache-2.0"
+repository = "https://github.com/parallelchain-io/pchain-compile"
+
+[lib]
+name = "pchain_compile"
+path = "src/lib.rs"
 
 [[bin]]
 name = "pchain_compile"
