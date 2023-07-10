@@ -29,7 +29,7 @@ pub enum Error {
     InvalidDestinationPath,
 
     #[error("Dependency path not valid.")]
-    InvalidDependenecyPath,
+    InvalidDependencyPath,
 }
 
 impl Error {
@@ -41,7 +41,7 @@ impl Error {
             Error::ManifestFailure => "Failed to compile.\nDetails: Manifest File Not Found. Check if the manifest file exists on the source code path.".to_string(),
             Error::InvalidSourcePath => "Failed to compile.\nDetails: Source Code Path Not Valid. Check if you have provided the correct path to your source code directory and confirm write access privileges.".to_string(),
             Error::InvalidDestinationPath => "\nDetails: Destination Path Not Valid. Check if you have provided the correct path to save your optimized WASM binary and confirm write access privileges.".to_string(),
-            Error::InvalidDependenecyPath => "\nDetails: Dependency Paths specified within Smart Contract Crate Not Valid. Check if you have provided the correct path to the dependencies on your source".to_string(),
+            Error::InvalidDependencyPath => "\nDetails: Dependency Paths specified within Smart Contract Crate Not Valid. Check if you have provided the correct path to the dependencies on your source".to_string(),
         }
     }
 }

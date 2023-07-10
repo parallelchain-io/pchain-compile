@@ -4,8 +4,8 @@
 */
 
 //! `pchain_compile` is a library to build ParallelChain Smart Contract that can be deployed to
-//! ParallelChain Mainnet. It takes a ParallelChain Smart Contract which is written in Rust, and then 
-//! builds by Cargo in a docker environment.
+//! ParallelChain Mainnet. It takes a ParallelChain Smart Contract  written in Rust and builds by
+//! Cargo in a docker environment.
 //! 
 //! # Example
 //! ```no_run

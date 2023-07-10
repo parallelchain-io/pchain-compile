@@ -4,7 +4,7 @@
 */
 
 //! `pchain_compile` is a command line interface tool to build ParallelChain Smart Contract that can be deployed to
-//! ParallelChain Mainnet. It takes a ParallelChain Smart Contract which is written in Rust, and then builds by Cargo
+//! ParallelChain Mainnet. It takes a ParallelChain Smart Contract written in Rust and builds by Cargo
 //! in a docker environment.
 
 use clap::Parser;
@@ -37,7 +37,7 @@ enum PchainCompile {
         verbatim_doc_comment
     )]
     Build {
-        /// Absolute/Relative path to the source code directory. This field can be used multiple times for multiple contracts, e.g. 
+        /// Absolute/Relative path to the source code directory. This field can be used multiple times to build multiple contracts at a time, e.g. 
         /// 
         /// --source <path to contract A> --source <path to contract B>
         #[clap(long = "source", display_order = 1, verbatim_doc_comment)]

@@ -34,7 +34,7 @@ use rand::{distributions::Alphanumeric, thread_rng, Rng};
 
 const PCHAIN_COMPILE_IMAGE: &str = "parallelchainlab/pchain_compile:mainnet01";
 
-/// get a random string for naming the docker container.
+/// Generate a random Docker container name
 pub fn random_container_name() -> String {
     thread_rng()
         .sample_iter(&Alphanumeric)
@@ -107,7 +107,7 @@ pub async fn copy_files(
         .replace(':', "")
         .replace('\\', "/")
         .replace(' ', "_")
-        .trim_start_matches("/").to_string(); // Remove the starting "/" for linux file path format.
+        .trim_start_matches('/').to_string(); // Remove the starting "/" for linux file path format.
 
     let src_path = Path::new(source_path).to_path_buf();
     let dst_path =
@@ -153,7 +153,7 @@ pub async fn copy_files_from(
         path: container_path
     };
 
-    // Parse Compress File
+    // Parse compressed file
     let compressed_data = docker
         .download_from_container(container_name, Some(download_option))
         .try_collect::<Vec<_>>()
@@ -162,7 +162,7 @@ pub async fn copy_files_from(
         .concat();
     let files_content = files_from_tar_gz(compressed_data)?;
 
-    // Save to Distination
+    // Save to destination
     let output_path = specified_output_path
         .unwrap_or(Path::new(".").to_path_buf());
     files_content.iter().for_each(|(file_name, content)| {

@@ -3,7 +3,7 @@
     Licensed under the Apache License, Version 2.0: http://www.apache.org/licenses/LICENSE-2.0
 */
 
-//! Implements methods to obtain mainifests of the contract and its dependencies.
+//! Implements methods to obtain manifests of the contract and its dependencies.
 
 use std::{
     collections::HashSet,
@@ -52,11 +52,11 @@ pub fn package_name(current_dir: &Path) -> Result<String, Error> {
 pub fn get_absolute_path(current_dir: &str) -> Result<String, Error> {
     // get canonicalized path to the directory.
     let canonicalized_path = dunce::canonicalize(current_dir)
-        .map_err(|_| Error::InvalidDependenecyPath)?;
+        .map_err(|_| Error::InvalidDependencyPath)?;
 
     // also check if pchain-compile has write privileges to the canonicalized path.
-    // if check succeeds, get absolute path to the directory.
+    // if check passes, get absolute path to the directory.
     canonicalized_path.access(AccessMode::WRITE)
     .map(|_| String::from(canonicalized_path.to_string_lossy()))
-    .map_err(|_| Error::InvalidDependenecyPath)
+    .map_err(|_| Error::InvalidDependencyPath)
 }
