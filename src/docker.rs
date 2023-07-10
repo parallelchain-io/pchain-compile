@@ -106,7 +106,9 @@ pub async fn copy_files(
     let save_to_path = source_path
         .replace(':', "")
         .replace('\\', "/")
-        .replace(' ', "_");
+        .replace(' ', "_")
+        .trim_start_matches("/").to_string(); // Remove the starting "/" for linux file path format.
+
     let src_path = Path::new(source_path).to_path_buf();
     let dst_path =
         Path::new(format!("{}.tar.gz", src_path.file_name().unwrap().to_str().unwrap()).as_str())
