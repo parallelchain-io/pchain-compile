@@ -32,13 +32,13 @@ enum PchainCompile {
     /// 1. Docker is installed and its execution permission under current user is granted.
     /// 2. Internet is reachable. (for pulling the docker image from docker hub)
     #[clap(
-        arg_required_else_help = false,
+        arg_required_else_help = true,
         display_order = 1,
         verbatim_doc_comment
     )]
     Build {
-        /// Absolute/Relative path to the source code directory. This field can be used multiple times to build multiple contracts at a time, e.g. 
-        /// 
+        /// Absolute/Relative path to the source code directory. This field can be used multiple times to build multiple contracts at a time.
+        /// For example,
         /// --source <path to contract A> --source <path to contract B>
         #[clap(long = "source", display_order = 1, verbatim_doc_comment)]
         source_path: Vec<PathBuf>,
@@ -55,7 +55,11 @@ async fn main() {
         PchainCompile::Build {
             source_path,
             destination_path,
-        } if !source_path.is_empty() => {
+        } => {
+            if source_path.is_empty() {
+                println!("Please provide at least one source!");
+                std::process::exit(-1);
+            }
             println!("Build process started. This could take several minutes for large contracts.");
 
             // Spawn threads to handle each contract code
@@ -79,18 +83,16 @@ async fn main() {
             if !success.is_empty() {
                 let dst_path = destination_path.clone().unwrap_or(Path::new(".").to_path_buf());
                 let contracts: Vec<String> = success.into_iter().map(|r| r.ok().unwrap()).collect();
-                print!("Finished compiling. ParallelChain Mainnet smart contract(s) {:?} are saved at ({})", contracts, crate::manifests::get_absolute_path(dst_path.as_os_str().to_str().unwrap()).unwrap());
+                println!("Finished compiling. ParallelChain Mainnet smart contract(s) {:?} are saved at ({})", contracts, crate::manifests::get_absolute_path(dst_path.as_os_str().to_str().unwrap()).unwrap());
             }
             
             if !fails.is_empty() {
+                println!("Compiling fails.");
                 fails.into_iter().for_each(|e|{
                     let error = e.err().unwrap();
                     println!("{}\n{}\n", error, error.detail());
                 });
             }
-        },
-        _=>{
-            println!("Invalid Command");
         }
     };
 }

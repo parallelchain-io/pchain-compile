@@ -36,7 +36,7 @@ impl Error {
     pub fn detail(&self) -> String {
         match self {
             Error::ArtifactRemovalFailure => "The compilation was successful, but pchain-compile failed to stop its Docker containers. Please remove them manually.".to_string(), 
-            Error::BuildFailure(e) => format!("\nDetails: {}. Please rectify the errors and build your source code again.", &e),
+            Error::BuildFailure(e) => format!("\nDetails: {}\nPlease rectify the errors and build your source code again.", &e),
             Error::DockerDaemonFailure => "Failed to compile.\nDetails: Docker Daemon Failure. Check if Docker is running on your machine and confirm read/write access privileges.".to_string(),
             Error::ManifestFailure => "Failed to compile.\nDetails: Manifest File Not Found. Check if the manifest file exists on the source code path.".to_string(),
             Error::InvalidSourcePath => "Failed to compile.\nDetails: Source Code Path Not Valid. Check if you have provided the correct path to your source code directory and confirm write access privileges.".to_string(),

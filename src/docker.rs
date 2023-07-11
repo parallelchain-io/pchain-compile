@@ -56,7 +56,7 @@ pub async fn pull_image(docker: &Docker) -> Result<(), Error> {
         )
         .try_collect::<Vec<_>>()
         .await
-        .unwrap();
+        .map_err(|_| Error::DockerDaemonFailure)?;
 
     if create_image_infos.is_empty() || create_image_infos.first().unwrap().error.is_some() {
         return Err(Error::DockerDaemonFailure);
@@ -111,10 +111,11 @@ pub async fn copy_files(
 
     let src_path = Path::new(source_path).to_path_buf();
     let dst_path =
-        Path::new(format!("{}.tar.gz", src_path.file_name().unwrap().to_str().unwrap()).as_str())
+        Path::new(format!("{}-{}.tar.gz", container_name, src_path.file_name().unwrap().to_str().unwrap()).as_str())
             .to_path_buf();
 
-    create_tar_gz(src_path, &save_to_path, &dst_path).unwrap();
+    create_tar_gz(src_path, &save_to_path, &dst_path)
+        .map_err(|_| Error::DockerDaemonFailure)?;
 
     // Read Content
     let file_content = File::open(dst_path.clone())
@@ -125,6 +126,7 @@ pub async fn copy_files(
         })
         .map_err(|_| Error::DockerDaemonFailure)?;
 
+    // Save to docker container
     let result = docker
         .upload_to_container(
             container_name,
@@ -137,7 +139,7 @@ pub async fn copy_files(
         .await;
 
     // Remove file
-    std::fs::remove_file(&dst_path).unwrap();
+    let _ = std::fs::remove_file(&dst_path); // remove the compressed file .tar.gz
 
     result.map_err(|_| Error::DockerDaemonFailure)
 }
@@ -162,13 +164,19 @@ pub async fn copy_files_from(
         .concat();
     let files_content = files_from_tar_gz(compressed_data)?;
 
+    if files_content.is_empty() {
+        return Err(Error::BuildFailure("Fail to build contract. Please ensure there is no compilation error in the source code.".to_string()))
+    }
+
     // Save to destination
     let output_path = specified_output_path
         .unwrap_or(Path::new(".").to_path_buf());
-    files_content.iter().for_each(|(file_name, content)| {
-        let mut fs = File::create(output_path.join(file_name)).unwrap();
-        let _ = fs.write(content);
-    });
+    for (file_name, content) in &files_content {
+        let mut fs = File::create(output_path.join(file_name))
+            .map_err(|_| Error::BuildFailure("Fail to access to destination path.".to_string()))?;
+        fs.write(content)
+            .map_err(|_| Error::BuildFailure("Fail to write the compiled contract to destination path.".to_string()))?;
+    }
 
     Ok(())
 }
