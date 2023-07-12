@@ -1,89 +1,98 @@
 /*
-    Copyright © 2023, ParallelChain Lab 
+    Copyright © 2023, ParallelChain Lab
     Licensed under the Apache License, Version 2.0: http://www.apache.org/licenses/LICENSE-2.0
 */
 
 //! `pchain_compile` is a command line interface tool to build ParallelChain Smart Contract that can be deployed to
-//! ParallelChain Mainnet. It takes a ParallelChain Smart Contract which is written in Rust, and then builds by Cargo
-//! in a docker environment. 
+//! ParallelChain Mainnet. It takes a ParallelChain Smart Contract written in Rust and builds by Cargo
+//! in a docker environment.
 
-use std::env;
 use clap::Parser;
+use std::path::{PathBuf, Path};
 
-pub mod build;
-use build::build_target;
+mod build;
 
-pub mod processes;
-use processes::ProcessExitCode;
+mod docker;
+
+mod error;
+
+mod manifests;
 
 #[derive(Debug, Parser)]
 #[clap(
     name = "pchain-compile",
-    version = "0.4.0", 
+    version = env!("CARGO_PKG_VERSION"), 
     about = "ParallelChain Smart Contract Compile CLI\n\n\
              A command line tool for reproducibly building Rust code into compact, gas-efficient WebAssembly ParallelChain Smart Contract.", 
     author = "<ParallelChain Lab>", 
     long_about = None
 )]
-/// asdasdasd
 enum PchainCompile {
     /// Build the source code. Please make sure:
     /// 1. Docker is installed and its execution permission under current user is granted.
     /// 2. Internet is reachable. (for pulling the docker image from docker hub)
-    #[clap(arg_required_else_help = false, display_order=1, verbatim_doc_comment)]
+    #[clap(
+        arg_required_else_help = true,
+        display_order = 1,
+        verbatim_doc_comment
+    )]
     Build {
-        /// Absolute/Relative path to the source code directory.
-        #[clap(long="source", display_order=1, verbatim_doc_comment)]
-        source_path : String,
-        /// Absolute/Relative path for saving the compiled optimized wasm file. 
-        #[clap(long="destination", display_order=2, verbatim_doc_comment)]
-        destination_path : Option<String>,
+        /// Absolute/Relative path to the source code directory. This field can be used multiple times to build multiple contracts at a time.
+        /// For example,
+        /// --source <path to contract A> --source <path to contract B>
+        #[clap(long = "source", display_order = 1, verbatim_doc_comment)]
+        source_path: Vec<PathBuf>,
+        /// Absolute/Relative path for saving the compiled optimized wasm file.
+        #[clap(long = "destination", display_order = 2, verbatim_doc_comment)]
+        destination_path: Option<PathBuf>,
     },
 }
- 
+
 #[tokio::main]
 async fn main() {
     let args = PchainCompile::parse();
     match args {
-        PchainCompile::Build { source_path, destination_path } => {
-            let path: String = String::from(env::current_dir().unwrap().to_string_lossy());
-            let patterns : &[_] = &['~', '!', '"', '/'];
+        PchainCompile::Build {
+            source_path,
+            destination_path,
+        } => {
+            if source_path.is_empty() {
+                println!("Please provide at least one source!");
+                std::process::exit(-1);
+            }
+            println!("Build process started. This could take several minutes for large contracts.");
 
-            let mut source_path = String::from(source_path.trim_end_matches(patterns));
-            if source_path.to_lowercase() == "." { 
-                source_path = path.clone();
+            // Spawn threads to handle each contract code
+            let mut join_handles = vec![];
+            source_path.into_iter().for_each(|source_path|{
+               join_handles.push(tokio::spawn(crate::build::build_target(source_path, destination_path.clone())));
+            });
+
+            // Join threads to obtain results
+            let mut results = vec![];
+            for handle in join_handles {
+                results.push(handle.await.unwrap());
             }
 
-            let destination = match destination_path {
-                Some(dir) => {
-                    match dir.to_lowercase().as_ref() {
-                        "." => path,
-                        _ => dir,
-                    }
-                },
-                None => path,
-            };
+            // Display the results
+            let (
+                success, 
+                fails
+            ): (Vec<_>, Vec<_>) = results.into_iter().partition(Result::is_ok);
 
-            let result: String = match build_target(&source_path, &destination).await {
-                Ok(res) => res,
-                Err(e) => match_error(e).to_string(),
-            };
-
-            println!("{}", result);
-        },
+            if !success.is_empty() {
+                let dst_path = destination_path.clone().unwrap_or(Path::new(".").to_path_buf());
+                let contracts: Vec<String> = success.into_iter().map(|r| r.ok().unwrap()).collect();
+                println!("Finished compiling. ParallelChain Mainnet smart contract(s) {:?} are saved at ({})", contracts, crate::manifests::get_absolute_path(dst_path.as_os_str().to_str().unwrap()).unwrap());
+            }
+            
+            if !fails.is_empty() {
+                println!("Compiling fails.");
+                fails.into_iter().for_each(|e|{
+                    let error = e.err().unwrap();
+                    println!("{}\n{}\n", error, error.detail());
+                });
+            }
+        }
     };
-}
-
-
-/// match_error matches ProcessExitCode 
-fn match_error(error: ProcessExitCode) -> &'static str {
-    match error { 
-        ProcessExitCode::ArtifactRemovalFailure => "The compilation was successful, but pchain-compile failed to stop its Docker containers. Please remove them manually.", 
-        ProcessExitCode::BuildFailure(e) => Box::leak(format!("\nDetails: {}. Please rectify the errors and build your source code again.", &e).into_boxed_str()),        
-        ProcessExitCode::DockerDaemonFailure => "Failed to compile.\nDetails: Docker Daemon Failure. Check if Docker is running on your machine and confirm read/write access privileges.",
-        ProcessExitCode::ManifestFailure => "Failed to compile.\nDetails: Manifest File Not Found. Check if the manifest file exists on the source code path.",
-        ProcessExitCode::InvalidSourcePath => "Failed to compile.\nDetails: Source Code Path Not Valid. Check if you have provided the correct path to your source code directory and confirm write access privileges.",
-        ProcessExitCode::InvalidDestinationPath => "\nDetails: Destination Path Not Valid. Check if you have provided the correct path to save your optimized WASM binary and confirm write access privileges.",
-        ProcessExitCode::InvalidDependenecyPath => "\nDetails: Dependency Paths specified within Smart Contract Crate Not Valid. Check if you have provided the correct path to the dependencies on your source",
-    }
 }

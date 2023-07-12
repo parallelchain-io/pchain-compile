@@ -42,7 +42,7 @@ Explanation about the command and its arguments can be displayed by appending "h
 
 ## Toolchain
 
-`pchain_compile` utilizes a docker_image hosted on a public DockerHub repository of ParallelChain see [here](https://hub.docker.com/r/parallelchainlab/pchain_compile) for the build process. The docker image utilizes a toolchain whose components are shown below in the following table below:-
+`pchain_compile` utilizes a docker_image hosted on a public DockerHub repository of ParallelChain see [here](https://hub.docker.com/r/parallelchainlab/pchain_compile) for the build process. The docker image utilizes a toolchain whose components are shown below in the following table below:
      
 |Toolchain Component | Utility
 |:---                | :--- |
