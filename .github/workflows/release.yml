@@ -86,7 +86,7 @@ jobs:
   release:
     name: GitHub Release
     needs: build
-    runs-on: ubuntu-2022
+    runs-on: ubuntu-latest
     steps:
       - name: Query version number
         id: get_version
