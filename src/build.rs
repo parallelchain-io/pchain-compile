@@ -14,6 +14,7 @@
 //! 4. After compilation, copy the binary (wasm) from docker container to target destination.
 
 use bollard::Docker;
+use std::path::Path;
 use std::{collections::HashSet, path::PathBuf};
 
 use std::fs;
@@ -30,6 +31,14 @@ pub async fn build_target(
     if let Some(dst_path) = &destination_path {
         fs::create_dir_all(dst_path).map_err(|_| Error::InvalidDestinationPath)?;
     }
+
+    // check validity of source path (and convert relative path to absolute path if applicable)
+    let src_str = source_path
+        .to_str()
+        .ok_or(Error::InvalidSourcePath)?;
+    let src_absolute_str = crate::manifests::get_absolute_path(src_str)
+        .map_err(|_| Error::InvalidSourcePath)?;
+    let source_path = Path::new(&src_absolute_str).to_path_buf();
 
     // check if the manifest file exists on the path supplied.
     let package_name =
