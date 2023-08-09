@@ -30,18 +30,26 @@ pub enum Error {
 
     #[error("Dependency path not valid.")]
     InvalidDependencyPath,
+
+    #[error("Fails to create temporary directory.")]
+    CreateTempDir,
+
+    #[error("Unknown docker image tag")]
+    UnkownDockerImageTag(String),
 }
 
 impl Error {
     pub fn detail(&self) -> String {
         match self {
             Error::ArtifactRemovalFailure => "The compilation was successful, but pchain-compile failed to stop its Docker containers. Please remove them manually.".to_string(), 
-            Error::BuildFailure(e) => format!("\nDetails: {}\nPlease rectify the errors and build your source code again.", &e),
+            Error::BuildFailure(e) => format!("\nDetails: {e}\nPlease rectify the errors and build your source code again."),
             Error::DockerDaemonFailure => "Failed to compile.\nDetails: Docker Daemon Failure. Check if Docker is running on your machine and confirm read/write access privileges.".to_string(),
             Error::ManifestFailure => "Failed to compile.\nDetails: Manifest File Not Found. Check if the manifest file exists on the source code path.".to_string(),
             Error::InvalidSourcePath => "Failed to compile.\nDetails: Source Code Path Not Valid. Check if you have provided the correct path to your source code directory and confirm write access privileges.".to_string(),
             Error::InvalidDestinationPath => "\nDetails: Destination Path Not Valid. Check if you have provided the correct path to save your optimized WASM binary and confirm write access privileges.".to_string(),
             Error::InvalidDependencyPath => "\nDetails: Dependency Paths specified within Smart Contract Crate Not Valid. Check if you have provided the correct path to the dependencies on your source".to_string(),
+            Error::CreateTempDir => "\nDetails: The compilation process requires creating a temporary folder in your machine. Please check if the program has write permission to create folder.".to_string(),
+            Error::UnkownDockerImageTag(tag) => format!("\nDetails: The docker image tag ({tag}) is not recognised. Please choose tag from dockerhub https://hub.docker.com/r/parallelchainlab/pchain_compile"),
         }
     }
 }

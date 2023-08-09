@@ -6,7 +6,15 @@
 
 `pchain_compile` builds the source code in a docker environment. To know more about Docker and install it, refer to the [official instructions](https://docs.docker.com/get-docker/).
 
-## Build the Source Code 
+## Installation
+
+Prebuilt binaries can be downloaded from assets in Github [releases page](https://github.com/parallelchain-io/pchain-compile/releases). Alternatively, you can install by `cargo install` if Rust has been installed already.
+
+```sh
+cargo install pchain_compile
+```
+
+## Build the Source Code
 
 Suppose you have the source code of smart contract in the folder `contract` under your home directory. 
 
@@ -42,11 +50,14 @@ Explanation about the command and its arguments can be displayed by appending "h
 
 ## Toolchain
 
-`pchain_compile` utilizes a docker_image hosted on a public DockerHub repository of ParallelChain see [here](https://hub.docker.com/r/parallelchainlab/pchain_compile) for the build process. The docker image utilizes a toolchain whose components are shown below in the following table below:
-     
-|Toolchain Component | Utility
-|:---                | :--- |
-rustc                | Compiler for Rust. |
-wasm-snip (0.4.0) | WASM utility which removes functions that are never called at runtime. |   
-wasm-opt  (109)  | WASM utility to load WebAssembly in text format and run Binaryen IR passes to optimize its size. For more information on Binaryen IR see [here](http://webassembly.github.io/binaryen/). |
+`pchain_compile` utilizes a docker_image hosted on a public DockerHub repository of ParallelChain see [here](https://hub.docker.com/r/parallelchainlab/pchain_compile) for the build process. Required components include:
+- rustc: compiler for Rust.
+- wasm-snip: WASM utility which removes functions that are never called at runtime.
+- wasm-opt: WASM utility to load WebAssembly in text format and run Binaryen IR passes to optimize its size. For more information on Binaryen IR see [here](http://webassembly.github.io/binaryen/).
 
+The docker images utilize a toolchain whose versions of each component are shown in the following table:
+
+|Image Tag |rustc |wasm-snip |wasm-opt |
+|:---|:---|:---|:---|
+|0.4.2 |1.71.0 |0.4.0 |114 |
+|mainnet01 |1.66.1 |0.4.0 |109 |

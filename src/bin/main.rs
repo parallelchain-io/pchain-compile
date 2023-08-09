@@ -8,15 +8,8 @@
 //! in a docker environment.
 
 use clap::Parser;
-use std::path::{PathBuf, Path};
-
-mod build;
-
-mod docker;
-
-mod error;
-
-mod manifests;
+use pchain_compile::{config::Config, DockerConfig, DockerOption};
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Parser)]
 #[clap(
@@ -31,11 +24,7 @@ enum PchainCompile {
     /// Build the source code. Please make sure:
     /// 1. Docker is installed and its execution permission under current user is granted.
     /// 2. Internet is reachable. (for pulling the docker image from docker hub)
-    #[clap(
-        arg_required_else_help = true,
-        display_order = 1,
-        verbatim_doc_comment
-    )]
+    #[clap(arg_required_else_help = true, display_order = 1, verbatim_doc_comment)]
     Build {
         /// Absolute/Relative path to the source code directory. This field can be used multiple times to build multiple contracts at a time.
         /// For example,
@@ -45,6 +34,35 @@ enum PchainCompile {
         /// Absolute/Relative path for saving the compiled optimized wasm file.
         #[clap(long = "destination", display_order = 2, verbatim_doc_comment)]
         destination_path: Option<PathBuf>,
+
+        /// Compile contract without using docker. This option requires installation of Rust and target "wasm32-unknown-unknown".
+        /// **Please note the compiled contracts are not always consistent with the previous compiled ones, because the building 
+        /// process happens in your local changing environment.**
+        /// 
+        /// To install target "wasm32-unknown-unkown", run the following command:
+        ///
+        /// $ rustup add wasm32-unknown-unknown
+        #[clap(
+            long = "dockerless",
+            display_order = 3,
+            verbatim_doc_comment,
+            group = "docker-option"
+        )]
+        dockerless: bool,
+
+        /// Tag of the docker image being pulled from Dockerhub. Please find the tags information in
+        /// https://hub.docker.com/r/parallelchainlab/pchain_compile.
+        ///
+        /// Available tags:
+        /// - mainnet01
+        /// - 0.4.2
+        #[clap(
+            long = "use-docker-tag",
+            display_order = 4,
+            verbatim_doc_comment,
+            group = "docker-option"
+        )]
+        docker_image_tag: Option<String>,
     },
 }
 
@@ -55,6 +73,8 @@ async fn main() {
         PchainCompile::Build {
             source_path,
             destination_path,
+            dockerless,
+            docker_image_tag,
         } => {
             if source_path.is_empty() {
                 println!("Please provide at least one source!");
@@ -62,10 +82,24 @@ async fn main() {
             }
             println!("Build process started. This could take several minutes for large contracts.");
 
+            let docker_option = if dockerless {
+                DockerOption::Dockerless
+            } else {
+                DockerOption::Docker(DockerConfig {
+                    tag: docker_image_tag,
+                })
+            };
+
             // Spawn threads to handle each contract code
             let mut join_handles = vec![];
-            source_path.into_iter().for_each(|source_path|{
-               join_handles.push(tokio::spawn(crate::build::build_target(source_path, destination_path.clone())));
+            source_path.into_iter().for_each(|source_path| {
+                let config = Config {
+                    source_path,
+                    destination_path: destination_path.clone(),
+                    docker_option: docker_option.clone(),
+                };
+
+                join_handles.push(tokio::spawn(config.run()));
             });
 
             // Join threads to obtain results
@@ -75,20 +109,19 @@ async fn main() {
             }
 
             // Display the results
-            let (
-                success, 
-                fails
-            ): (Vec<_>, Vec<_>) = results.into_iter().partition(Result::is_ok);
+            let (success, fails): (Vec<_>, Vec<_>) = results.into_iter().partition(Result::is_ok);
 
             if !success.is_empty() {
-                let dst_path = destination_path.clone().unwrap_or(Path::new(".").to_path_buf());
+                let dst_path = destination_path
+                    .clone()
+                    .unwrap_or(Path::new(".").to_path_buf());
                 let contracts: Vec<String> = success.into_iter().map(|r| r.ok().unwrap()).collect();
-                println!("Finished compiling. ParallelChain Mainnet smart contract(s) {:?} are saved at ({})", contracts, crate::manifests::get_absolute_path(dst_path.as_os_str().to_str().unwrap()).unwrap());
+                println!("Finished compiling. ParallelChain Mainnet smart contract(s) {:?} are saved at ({})", contracts,  dunce::canonicalize(dst_path).unwrap().to_str().unwrap());
             }
-            
+
             if !fails.is_empty() {
                 println!("Compiling fails.");
-                fails.into_iter().for_each(|e|{
+                fails.into_iter().for_each(|e| {
                     let error = e.err().unwrap();
                     println!("{}\n{}\n", error, error.detail());
                 });

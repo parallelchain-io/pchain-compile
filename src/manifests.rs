@@ -5,10 +5,7 @@
 
 //! Implements methods to obtain manifests of the contract and its dependencies.
 
-use std::{
-    collections::HashSet,
-    path::Path,
-};
+use std::{collections::HashSet, path::Path};
 
 use cargo_toml::{DependencyDetail, Manifest};
 use faccess::{AccessMode, PathExt};
@@ -24,7 +21,11 @@ pub fn get_dependency_paths(
         Manifest::from_path(source_path.join("Cargo.toml")).map_err(|_| Error::ManifestFailure)?;
 
     for dependency in source_manifest.dependencies.values() {
-        if let Some(DependencyDetail { path: Some(current_path), .. }) = dependency.detail() {
+        if let Some(DependencyDetail {
+            path: Some(current_path),
+            ..
+        }) = dependency.detail()
+        {
             let derived_path = get_absolute_path(current_path).unwrap_or(get_absolute_path(
                 source_path.join(current_path).as_os_str().to_str().unwrap(),
             )?);
@@ -32,8 +33,7 @@ pub fn get_dependency_paths(
             if !dependencies.contains(&derived_path) {
                 dependencies.insert(derived_path.clone());
                 // SAFETY: recursive call can be very deep
-                let _ =
-                    get_dependency_paths(Path::new(&derived_path), dependencies);
+                let _ = get_dependency_paths(Path::new(&derived_path), dependencies);
             }
         }
     }
@@ -51,12 +51,13 @@ pub fn package_name(current_dir: &Path) -> Result<String, Error> {
 /// Returns absolute path for a current directory.
 pub fn get_absolute_path(current_dir: &str) -> Result<String, Error> {
     // get canonicalized path to the directory.
-    let canonicalized_path = dunce::canonicalize(current_dir)
-        .map_err(|_| Error::InvalidDependencyPath)?;
+    let canonicalized_path =
+        dunce::canonicalize(current_dir).map_err(|_| Error::InvalidDependencyPath)?;
 
     // also check if pchain-compile has write privileges to the canonicalized path.
     // if check passes, get absolute path to the directory.
-    canonicalized_path.access(AccessMode::WRITE)
-    .map(|_| String::from(canonicalized_path.to_string_lossy()))
-    .map_err(|_| Error::InvalidDependencyPath)
+    canonicalized_path
+        .access(AccessMode::WRITE)
+        .map(|_| String::from(canonicalized_path.to_string_lossy()))
+        .map_err(|_| Error::InvalidDependencyPath)
 }

@@ -9,7 +9,7 @@
 use std::{
     io::{Read, Write},
     ops::Not,
-    path::{Path, PathBuf}
+    path::{Path, PathBuf},
 };
 
 use bollard::{
@@ -32,7 +32,8 @@ use std::fs::File;
 use crate::error::Error;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 
-const PCHAIN_COMPILE_IMAGE: &str = "parallelchainlab/pchain_compile:mainnet01";
+pub(crate) const PCHAIN_COMPILE_IMAGE_TAGS: [&str; 2] = ["mainnet01", env!("CARGO_PKG_VERSION")];
+pub(crate) const PCHAIN_COMPILE_IMAGE: &str = "parallelchainlab/pchain_compile";
 
 /// Generate a random Docker container name
 pub fn random_container_name() -> String {
@@ -44,11 +45,12 @@ pub fn random_container_name() -> String {
 }
 
 /// Pull docker image from ParallelChain Lab DockerHub
-pub async fn pull_image(docker: &Docker) -> Result<(), Error> {
+pub async fn pull_image(docker: &Docker, tag: &str) -> Result<String, Error> {
+    let from_image = format!("{PCHAIN_COMPILE_IMAGE}:{tag}");
     let create_image_infos = &docker
         .create_image(
             Some(CreateImageOptions {
-                from_image: PCHAIN_COMPILE_IMAGE,
+                from_image: from_image.clone(),
                 ..Default::default()
             }),
             None,
@@ -62,11 +64,15 @@ pub async fn pull_image(docker: &Docker) -> Result<(), Error> {
         return Err(Error::DockerDaemonFailure);
     }
 
-    Ok(())
+    Ok(from_image)
 }
 
 /// Start containter with the Image pulled from ParallelChain Lab DockerHub
-pub async fn start_container(docker: &Docker, container_name: &str) -> Result<(), Error> {
+pub async fn start_container(
+    docker: &Docker,
+    container_name: &str,
+    image: String,
+) -> Result<(), Error> {
     let _container_create_response = docker
         .create_container(
             Some(CreateContainerOptions {
@@ -74,7 +80,7 @@ pub async fn start_container(docker: &Docker, container_name: &str) -> Result<()
                 platform: None,
             }),
             Config {
-                image: Some(PCHAIN_COMPILE_IMAGE),
+                image: Some(image),
                 open_stdin: Some(true),
                 tty: Some(true),
                 host_config: Some(HostConfig {
@@ -107,15 +113,21 @@ pub async fn copy_files(
         .replace(':', "")
         .replace('\\', "/")
         .replace(' ', "_")
-        .trim_start_matches('/').to_string(); // Remove the starting "/" for linux file path format.
+        .trim_start_matches('/')
+        .to_string(); // Remove the starting "/" for linux file path format.
 
     let src_path = Path::new(source_path).to_path_buf();
-    let dst_path =
-        Path::new(format!("{}-{}.tar.gz", container_name, src_path.file_name().unwrap().to_str().unwrap()).as_str())
-            .to_path_buf();
+    let dst_path = Path::new(
+        format!(
+            "{}-{}.tar.gz",
+            container_name,
+            src_path.file_name().unwrap().to_str().unwrap()
+        )
+        .as_str(),
+    )
+    .to_path_buf();
 
-    create_tar_gz(src_path, &save_to_path, &dst_path)
-        .map_err(|_| Error::DockerDaemonFailure)?;
+    create_tar_gz(src_path, &save_to_path, &dst_path).map_err(|_| Error::DockerDaemonFailure)?;
 
     // Read Content
     let file_content = File::open(dst_path.clone())
@@ -152,7 +164,7 @@ pub async fn copy_files_from(
     specified_output_path: Option<PathBuf>,
 ) -> Result<(), Error> {
     let download_option = DownloadFromContainerOptions {
-        path: container_path
+        path: container_path,
     };
 
     // Parse compressed file
@@ -165,17 +177,19 @@ pub async fn copy_files_from(
     let files_content = files_from_tar_gz(compressed_data)?;
 
     if files_content.is_empty() {
-        return Err(Error::BuildFailure("Fail to build contract. Please ensure there is no compilation error in the source code.".to_string()))
+        return Err(Error::BuildFailure("Fail to build contract. Please ensure there is no compilation error in the source code.".to_string()));
     }
 
     // Save to destination
-    let output_path = specified_output_path
-        .unwrap_or(Path::new(".").to_path_buf());
+    let output_path = specified_output_path.unwrap_or(Path::new(".").to_path_buf());
     for (file_name, content) in &files_content {
         let mut fs = File::create(output_path.join(file_name))
             .map_err(|_| Error::BuildFailure("Fail to access to destination path.".to_string()))?;
-        fs.write(content)
-            .map_err(|_| Error::BuildFailure("Fail to write the compiled contract to destination path.".to_string()))?;
+        fs.write(content).map_err(|_| {
+            Error::BuildFailure(
+                "Fail to write the compiled contract to destination path.".to_string(),
+            )
+        })?;
     }
 
     Ok(())
