@@ -32,7 +32,9 @@ use std::fs::File;
 use crate::error::Error;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 
+/// List of docker image tags that can be used. 
 pub(crate) const PCHAIN_COMPILE_IMAGE_TAGS: [&str; 2] = ["mainnet01", env!("CARGO_PKG_VERSION")];
+/// The repo name in Parallelchain Lab Dockerhub: https://hub.docker.com/r/parallelchainlab/pchain_compile
 pub(crate) const PCHAIN_COMPILE_IMAGE: &str = "parallelchainlab/pchain_compile";
 
 /// Generate a random Docker container name
@@ -44,7 +46,7 @@ pub fn random_container_name() -> String {
         .collect()
 }
 
-/// Pull docker image from ParallelChain Lab DockerHub
+/// Pull docker image from ParallelChain Lab DockerHub. Returns the name of docker image.
 pub async fn pull_image(docker: &Docker, tag: &str) -> Result<String, Error> {
     let from_image = format!("{PCHAIN_COMPILE_IMAGE}:{tag}");
     let create_image_infos = &docker
@@ -67,7 +69,7 @@ pub async fn pull_image(docker: &Docker, tag: &str) -> Result<String, Error> {
     Ok(from_image)
 }
 
-/// Start containter with the Image pulled from ParallelChain Lab DockerHub
+/// Starts a containter with the Image pulled from ParallelChain Lab DockerHub
 pub async fn start_container(
     docker: &Docker,
     container_name: &str,

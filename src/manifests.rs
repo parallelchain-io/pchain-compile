@@ -48,14 +48,14 @@ pub fn package_name(current_dir: &Path) -> Result<String, Error> {
         .map_err(|_| Error::ManifestFailure)
 }
 
-/// Returns absolute path for a current directory.
-pub fn get_absolute_path(current_dir: &str) -> Result<String, Error> {
-    // get canonicalized path to the directory.
+/// Returns absolute path of a directory.
+pub fn get_absolute_path(dir: &str) -> Result<String, Error> {
+    // get canonicalized path of the directory.
     let canonicalized_path =
-        dunce::canonicalize(current_dir).map_err(|_| Error::InvalidDependencyPath)?;
+        dunce::canonicalize(dir).map_err(|_| Error::InvalidDependencyPath)?;
 
     // also check if pchain-compile has write privileges to the canonicalized path.
-    // if check passes, get absolute path to the directory.
+    // if check passes, get absolute path of the directory.
     canonicalized_path
         .access(AccessMode::WRITE)
         .map(|_| String::from(canonicalized_path.to_string_lossy()))

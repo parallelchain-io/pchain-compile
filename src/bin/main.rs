@@ -41,7 +41,7 @@ enum PchainCompile {
         /// 
         /// To install target "wasm32-unknown-unkown", run the following command:
         ///
-        /// $ rustup add wasm32-unknown-unknown
+        /// $ rustup target add wasm32-unknown-unknown
         #[clap(
             long = "dockerless",
             display_order = 3,

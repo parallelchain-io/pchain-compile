@@ -18,7 +18,7 @@ use crate::error::Error;
 
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 
-/// Generate a random temporary director name
+/// Generate a random temporary directory name
 pub(crate) fn random_temp_dir_name() -> PathBuf {
     std::env::temp_dir()
         .join(
@@ -31,11 +31,11 @@ pub(crate) fn random_temp_dir_name() -> PathBuf {
         .to_path_buf()
 }
 
-/// Equivalent to perform following commands:
+/// Equivalent to running following commands:
 /// 1. cargo build --target wasm32-unknown-unknown --release --quiet
-/// 2. wasm-opt -Oz wasm_file --output temp.wasm
+/// 2. wasm-opt -Oz <wasm_file> --output temp.wasm
 /// 3. wasm-snip temp.wasm --output temp2.wasm --snip-rust-fmt-code --snip-rust-panicking-code
-/// 4. wasm-opt --dce temp2.wasm --output optimized.wasm
+/// 4. wasm-opt --dce temp2.wasm --output <wasm_file>
 pub(crate) fn build_contract(
     working_folder: &Path,
     source_path: &Path,
@@ -93,7 +93,7 @@ pub(crate) fn build_contract(
         .emit_wasm_file(&temp2_wasm)
         .map_err(|e| Error::BuildFailure(format!("Wasm snip error:\n\n{:?}\n", e)))?;
 
-    // 4. wasm-opt --dce temp2.wasm --output optimized.wasm
+    // 4. wasm-opt --dce temp2.wasm --output wasm_file
     let optimized_wasm = output_path.join(wasm_file);
     wasm_opt::OptimizationOptions::new_optimize_for_size()
         .add_pass(wasm_opt::Pass::Dce)

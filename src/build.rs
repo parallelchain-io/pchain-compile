@@ -42,7 +42,7 @@ pub async fn build_target(
     build_target_with_docker(source_path, destination_path, DockerConfig::default()).await
 }
 
-/// Build target with use of docker.
+/// Validates inputs and trigger building process that uses docker.
 pub(crate) async fn build_target_with_docker(
     source_path: PathBuf,
     destination_path: Option<PathBuf>,
@@ -72,7 +72,7 @@ pub(crate) async fn build_target_with_docker(
     build_target_in_docker(source_path, destination_path, docker_image_tag, wasm_file).await
 }
 
-/// Build target without using docker.
+/// Validates inputs and trigger building process that does not use docker.
 pub(crate) async fn build_target_without_docker(
     source_path: PathBuf,
     destination_path: Option<PathBuf>,
@@ -100,7 +100,7 @@ fn validated_source_path(source_path: PathBuf) -> Result<PathBuf, Error> {
     Ok(Path::new(&src_absolute_str).to_path_buf())
 }
 
-/// Entry process for building contract with use of docker. It manages to pull docker image, start and remove containers.
+/// Setup docker environment and build contract in docker container. It manages to pull docker image, start and remove containers.
 async fn build_target_in_docker(
     source_path: PathBuf,
     destination_path: Option<PathBuf>,
@@ -134,7 +134,7 @@ async fn build_target_in_docker(
     result.map(|_| wasm_file)
 }
 
-/// Inner process for compiling contract in docker container. It does not remove docker container after use.
+/// Inner process in method [build_target_in_docker] to compile contract in docker container. It does not remove docker container after use.
 async fn compile_contract_in_docker_container(
     docker: &Docker,
     container_name: &str,
@@ -172,7 +172,7 @@ async fn compile_contract_in_docker_container(
     Ok(())
 }
 
-/// Entry process for building contract without using docker. It manages to create a temporary workding folder and 
+/// Setup filesystem and build contract by cargo. It manages to create a temporary workding folder and 
 /// remove it after call.
 async fn build_target_by_cargo(
     source_path: PathBuf,

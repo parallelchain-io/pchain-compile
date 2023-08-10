@@ -4,7 +4,7 @@
 */
 
 //! Configuration of pchain_compile. The struct `Config` specifies parameters being used, and
-//! provide a method `run` to start the compilation process.
+//! provides a method `run` that starts the compilation process.
 
 use std::path::PathBuf;
 
