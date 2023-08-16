@@ -1,22 +1,16 @@
-FROM rust:1.66.1 as cache
-
-# Download binaryen sources
-ADD https://github.com/WebAssembly/binaryen/archive/refs/tags/version_110.tar.gz /tmp/binaryen.tar.gz
+FROM rust:1.71.0 as cache
 
 # Extract and compile wasm-opt & install wasm-snip
 RUN apt update && apt-get -y install wget && \
-    wget https://github.com/WebAssembly/binaryen/releases/download/version_109/binaryen-version_109-x86_64-linux.tar.gz && \
-    tar xzf binaryen-version_109-x86_64-linux.tar.gz && mv binaryen-version_109/bin/wasm-opt /usr/local/bin && \
-    rm -rf binaryen-version_109*
+    wget https://github.com/WebAssembly/binaryen/releases/download/version_114/binaryen-version_114-x86_64-linux.tar.gz && \
+    tar xzf binaryen-version_114-x86_64-linux.tar.gz && mv binaryen-version_114/bin/wasm-opt /usr/local/bin && \
+    rm -rf binaryen-version_114*
 
 # pchain-compile base image
-FROM rust:1.66.1 as base-image
+FROM rust:1.71.0 as base-image
 
 # Setup rust with wasm support
 RUN cargo install wasm-snip && rustup target add wasm32-unknown-unknown && mkdir -p /root/bin
-
-# Install cargo prefetch and cache some frequently used crates for faster builds 
-RUN cargo install cargo-prefetch && cargo prefetch --top-downloads=100
 
 # Add wasm-opt
 COPY --from=cache /usr/local/bin/wasm-opt /root/bin
