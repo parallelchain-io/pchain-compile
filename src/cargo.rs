@@ -31,7 +31,7 @@ pub(crate) fn random_temp_dir_name() -> PathBuf {
         .to_path_buf()
 }
 
-/// Equivalent to running following commands:
+/// Equivalent to run following commands:
 /// 1. cargo build --target wasm32-unknown-unknown --release --quiet
 /// 2. wasm-opt -Oz <wasm_file> --output temp.wasm
 /// 3. wasm-snip temp.wasm --output temp2.wasm --snip-rust-fmt-code --snip-rust-panicking-code
@@ -40,14 +40,18 @@ pub(crate) fn build_contract(
     working_folder: &Path,
     source_path: &Path,
     destination_path: Option<PathBuf>,
+    mut locked: bool,
     wasm_file: &str,
 ) -> Result<(), Error> {
     let output_path = destination_path.unwrap_or(Path::new(".").to_path_buf());
 
+    // Disable "--locked" if the Cargo.lock file does not exist.
+    locked = locked && source_path.join("Cargo.lock").exists();
+
     // 1. cargo build --target wasm32-unknown-unknown --release --quiet
     let mut config = Config::default().unwrap();
     config
-        .configure(0, true, None, false, false, false, &None, &[], &[])
+        .configure(0, true, None, false, locked, false, &None, &[], &[])
         .unwrap();
     let mut compile_configs =
         CompileOptions::new(&config, cargo::util::command_prelude::CompileMode::Build).unwrap();
@@ -63,6 +67,11 @@ pub(crate) fn build_contract(
         })?;
     cargo::ops::compile(&ws, &compile_configs)
         .map_err(|e| Error::BuildFailure(format!("Error in cargo build:\n\n{:?}\n", e)))?;
+
+    // Save Cargo.lock to output folder if applicable
+    if locked {
+        std::fs::copy(source_path.join("Cargo.lock"), output_path.join("Cargo.lock"));
+    }
 
     // 2. wasm-opt -Oz wasm_file --output temp.wasm
     let temp_wasm = working_folder.join("temp.wasm");

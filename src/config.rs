@@ -17,8 +17,18 @@ pub struct Config {
     pub source_path: PathBuf,
     /// Path to destination folder. None if current folder should be used.
     pub destination_path: Option<PathBuf>,
+    /// Options for building rust code.
+    pub build_options: BuildOptions,
     /// Compilation option regards to use of docker.
     pub docker_option: DockerOption,
+}
+
+/// Options for building rust code.
+#[derive(Clone, Default)]
+pub struct BuildOptions {
+    /// Use of the Cargo.lock. It is equivalent to run Cargo build with 
+    /// flag "--locked".
+    pub locked: bool
 }
 
 /// Compilation option regards to docker.
@@ -49,12 +59,13 @@ impl Config {
                 crate::build::build_target_with_docker(
                     self.source_path,
                     self.destination_path,
+                    self.build_options,
                     docker_config,
                 )
                 .await
             }
             DockerOption::Dockerless => {
-                crate::build::build_target_without_docker(self.source_path, self.destination_path)
+                crate::build::build_target_without_docker(self.source_path, self.destination_path, self.build_options)
                     .await
             }
         }

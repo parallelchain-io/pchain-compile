@@ -8,7 +8,7 @@
 //! in a docker environment.
 
 use clap::Parser;
-use pchain_compile::{config::Config, DockerConfig, DockerOption};
+use pchain_compile::{config::Config, DockerConfig, DockerOption, BuildOptions};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Parser)]
@@ -34,6 +34,16 @@ enum PchainCompile {
         /// Absolute/Relative path for saving the compiled optimized wasm file.
         #[clap(long = "destination", display_order = 2, verbatim_doc_comment)]
         destination_path: Option<PathBuf>,
+
+        /// Build with locked versions of the dependencies. If the source code directory contains the 
+        /// file Cargo.lock, the building process uses the dependencies with the versions 
+        /// specified by the file. If the file does not present, it is equivalent to a disabled `locked`
+        /// option, and the building process continues.
+        /// 
+        /// With or without the presence of the input file, the compilation output includes the 
+        /// file Cargo.lock which was used or generated in the building process.
+        #[clap(ong = "locked", display_order = 3, verbatim_doc_comment)]
+        locked: bool,
 
         /// Compile contract without using docker. This option requires installation of Rust and target "wasm32-unknown-unknown".
         /// **Please note the compiled contracts are not always consistent with the previous compiled ones, because the building 
@@ -73,6 +83,7 @@ async fn main() {
         PchainCompile::Build {
             source_path,
             destination_path,
+            locked,
             dockerless,
             docker_image_tag,
         } => {
@@ -82,6 +93,10 @@ async fn main() {
             }
             println!("Build process started. This could take several minutes for large contracts.");
 
+            let build_options = BuildOptions {
+                locked
+            };
+            
             let docker_option = if dockerless {
                 DockerOption::Dockerless
             } else {
@@ -96,6 +111,7 @@ async fn main() {
                 let config = Config {
                     source_path,
                     destination_path: destination_path.clone(),
+                    build_options: build_options.clone(),
                     docker_option: docker_option.clone(),
                 };
 

@@ -7,7 +7,7 @@
 
 use std::path::Path;
 
-use pchain_compile::DockerOption;
+use pchain_compile::{DockerOption, BuildOptions};
 
 #[tokio::test]
 async fn build_contract() {
@@ -65,6 +65,7 @@ async fn build_contract_without_docker() {
     let wasm_name = pchain_compile::Config {
         source_path,
         destination_path: Some(destination_path.clone()),
+        build_options: BuildOptions::default(),
         docker_option: DockerOption::Dockerless,
     }
     .run()
