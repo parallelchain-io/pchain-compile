@@ -201,23 +201,23 @@ pub async fn copy_files_from(
 pub async fn build_contracts(
     docker: &Docker,
     container_name: &str,
-    source_path: &str,
-    mut locked: bool,
+    source_path: PathBuf,
+    locked: bool,
     wasm_file: &str,
 ) -> Result<String, Error> {
-    // Disable "--locked" if the Cargo.lock file does not exist.
-    locked = locked && source_path.join("Cargo.lock").exists();
-    let source_path = source_path
+    let source_path_str = source_path.to_str().unwrap()
         .replace(':', "")
         .replace('\\', "/")
         .replace(' ', "_");
-    let working_folder_code = format!("/{source_path}").to_string();
+    let working_folder_code = format!("/{source_path_str}").to_string();
     let working_folder_build =
-        format!("/{source_path}/target/wasm32-unknown-unknown/release").to_string();
+        format!("/{source_path_str}/target/wasm32-unknown-unknown/release").to_string();
     let output_folder = "/result";
     let output_file = format!("{output_folder}/{wasm_file}").to_string();
 
-    let cmd_cargo_build = if locked {
+    // Does not set "--locked" if the Cargo.lock file does not exist.
+    let use_cargo_lock = locked && source_path.join("Cargo.lock").exists();
+    let cmd_cargo_build = if use_cargo_lock {
         vec![
             "cargo",
             "build",
@@ -289,7 +289,7 @@ pub async fn build_contracts(
         cmds.push(
             (
                 &working_folder_code,
-                vec!["mv", "Cargo.lock", &output_folder]
+                vec!["mv", "Cargo.lock", output_folder]
             )
         );
     }

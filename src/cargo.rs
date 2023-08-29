@@ -40,18 +40,17 @@ pub(crate) fn build_contract(
     working_folder: &Path,
     source_path: &Path,
     destination_path: Option<PathBuf>,
-    mut locked: bool,
+    locked: bool,
     wasm_file: &str,
 ) -> Result<(), Error> {
     let output_path = destination_path.unwrap_or(Path::new(".").to_path_buf());
 
-    // Disable "--locked" if the Cargo.lock file does not exist.
-    locked = locked && source_path.join("Cargo.lock").exists();
-
     // 1. cargo build --target wasm32-unknown-unknown --release --quiet
+    // Does not set "--locked" if the Cargo.lock file does not exist.
+    let use_cargo_lock = locked && source_path.join("Cargo.lock").exists();
     let mut config = Config::default().unwrap();
     config
-        .configure(0, true, None, false, locked, false, &None, &[], &[])
+        .configure(0, true, None, false, use_cargo_lock, false, &None, &[], &[])
         .unwrap();
     let mut compile_configs =
         CompileOptions::new(&config, cargo::util::command_prelude::CompileMode::Build).unwrap();
@@ -70,7 +69,7 @@ pub(crate) fn build_contract(
 
     // Save Cargo.lock to output folder if applicable
     if locked {
-        std::fs::copy(source_path.join("Cargo.lock"), output_path.join("Cargo.lock"));
+        let _ = std::fs::copy(source_path.join("Cargo.lock"), output_path.join("Cargo.lock"));
     }
 
     // 2. wasm-opt -Oz wasm_file --output temp.wasm

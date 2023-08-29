@@ -31,10 +31,14 @@ use std::{collections::HashSet, path::PathBuf};
 use std::fs;
 
 use crate::error::Error;
-use crate::DockerConfig;
+use crate::{DockerConfig, BuildOptions};
 
 /// `build_target` takes the path to the cargo manifest file(s), generates an optimized WASM binary(ies) after building
 /// the source code and saves the binary(ies) to the designated destination_path.
+/// 
+/// This method is equivalent to run the command:
+/// 
+/// `pchain_compile` build --source `source_path` --destination `destination_path`
 pub async fn build_target(
     source_path: PathBuf,
     destination_path: Option<PathBuf>,
@@ -160,7 +164,7 @@ async fn compile_contract_in_docker_container(
     let result_in_docker = crate::docker::build_contracts(
         docker,
         container_name,
-        source_path.to_str().unwrap(),
+        source_path,
         options.locked,
         wasm_file,
     )
