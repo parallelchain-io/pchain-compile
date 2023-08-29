@@ -10,8 +10,11 @@ use thiserror::Error;
 /// Describes the exit status codes during building process.
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("The source code did not compile.")]
+    #[error("Failure during building process.")]
     BuildFailure(String),
+
+    #[error("Failure during building process.")]
+    BuildFailureWithLogs(String),
 
     #[error("Docker daemon service did not respond.")]
     DockerDaemonFailure,
@@ -43,6 +46,7 @@ impl Error {
         match self {
             Error::ArtifactRemovalFailure => "The compilation was successful, but pchain-compile failed to stop its Docker containers. Please remove them manually.".to_string(), 
             Error::BuildFailure(e) => format!("\nDetails: {e}\nPlease rectify the errors and build your source code again."),
+            Error::BuildFailureWithLogs(log) => format!("There maybe some problems in the source code.\nBuilding log is as follows:\n\n{log}\n"),
             Error::DockerDaemonFailure => "Failed to compile.\nDetails: Docker Daemon Failure. Check if Docker is running on your machine and confirm read/write access privileges.".to_string(),
             Error::ManifestFailure => "Failed to compile.\nDetails: Manifest File Not Found. Check if the manifest file exists on the source code path.".to_string(),
             Error::InvalidSourcePath => "Failed to compile.\nDetails: Source Code Path Not Valid. Check if you have provided the correct path to your source code directory and confirm write access privileges.".to_string(),

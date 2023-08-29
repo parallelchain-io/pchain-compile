@@ -5,7 +5,7 @@
 
 //! Implements the compilation process of smart contract by utilizing crates `cargo`, `wasm-opt` and `wasm-snip`.
 
-use std::path::{Path, PathBuf};
+use std::{path::{Path, PathBuf}, io::Write, sync::{Arc, Mutex}};
 
 use cargo::{
     core::compiler::{CompileKind, CompileTarget},
@@ -48,9 +48,9 @@ pub(crate) fn build_contract(
     // 1. cargo build --target wasm32-unknown-unknown --release --quiet
     // Does not set "--locked" if the Cargo.lock file does not exist.
     let use_cargo_lock = locked && source_path.join("Cargo.lock").exists();
-    let mut config = Config::default().unwrap();
+    let mut config = CargoConfig::new();
     config
-        .configure(0, true, None, false, use_cargo_lock, false, &None, &[], &[])
+        .configure(0, false, None, false, use_cargo_lock, false, &None, &[], &[])
         .unwrap();
     let mut compile_configs =
         CompileOptions::new(&config, cargo::util::command_prelude::CompileMode::Build).unwrap();
@@ -64,8 +64,9 @@ pub(crate) fn build_contract(
                 format!("Error in preparing workspace according to the manifest file in source path:\n\n{:?}\n", e),
             )
         })?;
-    cargo::ops::compile(&ws, &compile_configs)
-        .map_err(|e| Error::BuildFailure(format!("Error in cargo build:\n\n{:?}\n", e)))?;
+    if let Err(_) = cargo::ops::compile(&ws, &compile_configs) {
+        return Err(Error::BuildFailureWithLogs(config.logs()))
+    }
 
     // Save Cargo.lock to output folder if applicable
     if locked {
@@ -109,4 +110,67 @@ pub(crate) fn build_contract(
         .map_err(|e| Error::BuildFailure(format!("Wasm optimization error:\n\n{:?}\n", e)))?;
 
     Ok(())
+}
+
+/// Captures the [cargo::util::Config] with custom instantiation.
+pub struct CargoConfig {
+    /// The logs from the shell which is used by the cargo
+    logs: Arc<Mutex<Vec<String>>>,
+    /// Cargo configuration
+    config: Config,
+}
+
+impl CargoConfig {
+    pub fn new() -> Self {
+        // Setup a shell that stores logs in memory.
+        let logs = Arc::new(Mutex::new(Vec::<String>::new()));
+        let log_writter = BuildLogWritter { buffer: logs.clone() };
+        let shell = cargo::core::Shell::from_write(Box::new(log_writter));
+
+        // Setup Cargo configuration with the custom shell.
+        let current_dir = std::env::current_dir().unwrap();
+        let home_dir = cargo::util::homedir(&current_dir).unwrap();
+        let config = Config::new(shell, current_dir, home_dir);
+        Self {
+            logs,
+            config
+        }
+    }
+
+    /// Return logs as a String
+    pub fn logs(&self) -> String{
+        self.logs.lock().unwrap().join("")
+    }
+}
+
+impl std::ops::Deref for CargoConfig {
+    type Target = Config;
+    fn deref(&self) -> &Self::Target {
+        &self.config
+    }
+}
+
+impl std::ops::DerefMut for CargoConfig {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.config
+    }
+}
+
+/// Implements [std::io::Write] and be used by Cargo. It stores the 
+/// output logs during cargo building process.
+#[derive(Default)]
+pub struct BuildLogWritter {
+    pub buffer: Arc<Mutex<Vec<String>>>
+}
+
+impl Write for BuildLogWritter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        if let Ok(ref mut mutex) = self.buffer.try_lock() {
+            mutex.push(String::from_utf8_lossy(buf).to_string());
+        }
+        Ok(buf.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
 }

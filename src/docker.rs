@@ -32,8 +32,8 @@ use std::fs::File;
 use crate::error::Error;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 
-/// List of docker image tags that can be used. 
-pub(crate) const PCHAIN_COMPILE_IMAGE_TAGS: [&str; 2] = ["mainnet01", env!("CARGO_PKG_VERSION")];
+/// List of docker image tags that can be used. The first (0-indexed) is the default one. 
+pub(crate) const PCHAIN_COMPILE_IMAGE_TAGS: [&str; 2] = [env!("CARGO_PKG_VERSION"), "mainnet01"];
 /// The repo name in Parallelchain Lab Dockerhub: https://hub.docker.com/r/parallelchainlab/pchain_compile
 pub(crate) const PCHAIN_COMPILE_IMAGE: &str = "parallelchainlab/pchain_compile";
 
@@ -164,6 +164,7 @@ pub async fn copy_files_from(
     container_name: &str,
     container_path: &str,
     specified_output_path: Option<PathBuf>,
+    build_log: String,
 ) -> Result<(), Error> {
     let download_option = DownloadFromContainerOptions {
         path: container_path,
@@ -179,7 +180,7 @@ pub async fn copy_files_from(
     let files_content = files_from_tar_gz(compressed_data)?;
 
     if files_content.is_empty() {
-        return Err(Error::BuildFailure("Fail to build contract. Please ensure there is no compilation error in the source code.".to_string()));
+        return Err(Error::BuildFailureWithLogs(build_log));
     }
 
     // Save to destination
@@ -198,13 +199,14 @@ pub async fn copy_files_from(
 }
 
 /// Build contract by executing commands in docker container, including `Cargo`, `wasm-opt` and `wasm-snip`.
+/// Return the output folder path and the build logs if success.
 pub async fn build_contracts(
     docker: &Docker,
     container_name: &str,
     source_path: PathBuf,
     locked: bool,
     wasm_file: &str,
-) -> Result<String, Error> {
+) -> Result<(String, String), Error> {
     let source_path_str = source_path.to_str().unwrap()
         .replace(':', "")
         .replace('\\', "/")
@@ -225,7 +227,6 @@ pub async fn build_contracts(
             "--target",
             "wasm32-unknown-unknown",
             "--release",
-            "--quiet",
         ]
     } else {
         vec![
@@ -234,14 +235,21 @@ pub async fn build_contracts(
             "--target",
             "wasm32-unknown-unknown",
             "--release",
-            "--quiet",
         ]
     };
+
+    let build_log = execute(
+        docker,
+        container_name,
+        Some(&working_folder_code),
+        cmd_cargo_build,
+        true
+    )
+    .await
+    .map_err(|e| Error::BuildFailure(e.to_string()))?
+    .join("");
+
     let mut cmds = vec![
-        (
-            &working_folder_code,
-            cmd_cargo_build,
-        ),
         (
             &working_folder_build,
             vec!["chmod", "+x", "/root/bin/wasm-opt"],
@@ -295,12 +303,12 @@ pub async fn build_contracts(
     }
 
     for (working_dir, cmd) in cmds {
-        execute(docker, container_name, Some(working_dir), cmd)
+        execute(docker, container_name, Some(working_dir), cmd, false)
             .await
             .map_err(|e| Error::BuildFailure(e.to_string()))?;
     }
 
-    Ok(output_folder.to_string())
+    Ok((output_folder.to_string(), build_log))
 }
 
 /// Force stop and remove a container
@@ -359,7 +367,8 @@ async fn execute(
     container_name: &str,
     working_dir: Option<&str>,
     cmd: Vec<&str>,
-) -> Result<(), bollard::errors::Error> {
+    log_output: bool,
+) -> Result<Vec<String>, bollard::errors::Error> {
     let create_exec_results = docker
         .create_exec(
             container_name,
@@ -383,13 +392,24 @@ async fn execute(
         )
         .await?;
 
-    if let bollard::exec::StartExecResults::Attached { output, .. } = start_exec_results {
-        let _output = output.try_collect::<Vec<_>>().await?;
-    } else {
-        return Err(bollard::errors::Error::DockerStreamError {
-            error: "Execution Result Not Attached".to_string(),
-        });
+    match start_exec_results {
+        bollard::exec::StartExecResults::Attached { output, .. } => {
+            let log_outputs =
+            if log_output {
+                output.try_collect::<Vec<_>>()
+                    .await?
+                    .into_iter()
+                    .map(|output| output.to_string() )
+                    .collect()
+            } else {
+                Vec::new()
+            };
+            return Ok(log_outputs)
+        },
+        bollard::exec::StartExecResults::Detached => {
+            return Err(bollard::errors::Error::DockerStreamError {
+                error: "Execution Result Not Attached".to_string(),
+            });
+        }
     }
-
-    Ok(())
 }

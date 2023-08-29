@@ -161,7 +161,7 @@ async fn compile_contract_in_docker_container(
     crate::docker::copy_files(docker, container_name, source_path.to_str().unwrap()).await?;
 
     // Step 3: build the source code inside docker
-    let result_in_docker = crate::docker::build_contracts(
+    let (result_in_docker, build_log) = crate::docker::build_contracts(
         docker,
         container_name,
         source_path,
@@ -176,6 +176,7 @@ async fn compile_contract_in_docker_container(
         container_name,
         &result_in_docker,
         destination_path.clone(),
+        build_log
     )
     .await?;
 
