@@ -36,7 +36,7 @@ use rand::{distributions::Alphanumeric, thread_rng, Rng};
 pub(crate) const PCHAIN_COMPILE_IMAGE_TAGS: [&str; 2] = [env!("CARGO_PKG_VERSION"), "mainnet01"];
 /// The repo name in Parallelchain Lab Dockerhub: https://hub.docker.com/r/parallelchainlab/pchain_compile
 pub(crate) const PCHAIN_COMPILE_IMAGE: &str = "parallelchainlab/pchain_compile";
-const DOCKER_EXEC_TIME_LIMIT: u64 = 5; // secs. It is a time limit to normal docker execution (except cargo build).
+const DOCKER_EXEC_TIME_LIMIT: u64 = 15; // secs. It is a time limit to normal docker execution (except cargo build).
 
 /// Generate a random Docker container name
 pub fn random_container_name() -> String {
@@ -248,8 +248,7 @@ pub async fn build_contracts(
         None
     )
     .await
-    .map_err(|e| Error::BuildFailure(e.to_string()))?
-    .join("");
+    .map_err(|e| Error::BuildFailure(e.to_string()))?;
 
     let mut cmds = vec![
         (
@@ -378,7 +377,7 @@ async fn execute(
     cmd: Vec<&str>,
     log_output: bool,
     timeout_secs: Option<u64>
-) -> Result<Vec<String>, bollard::errors::Error> {
+) -> Result<String, Error> {
     let create_exec_results = docker
         .create_exec(
             container_name,
@@ -390,7 +389,8 @@ async fn execute(
                 ..Default::default()
             },
         )
-        .await?;
+        .await
+        .map_err(|e| Error::BuildFailure(e.to_string()))?;
 
     let start_exec_results = docker
         .start_exec(
@@ -400,45 +400,50 @@ async fn execute(
                 ..Default::default()
             }),
         )
-        .await?;
+        .await
+        .map_err(|e| Error::BuildFailure(e.to_string()))?;
 
     match start_exec_results {
         bollard::exec::StartExecResults::Attached { output, .. } => {
             let log_outputs =
             if log_output {
                 output.try_collect::<Vec<_>>()
-                    .await?
+                    .await
+                    .map_err(|e| Error::BuildFailure(e.to_string()))?
                     .into_iter()
                     .map(|output| output.to_string() )
                     .collect()
             } else {
                 Vec::new()
-            };
+            }
+            .join("");
 
             // Wait until the execution finishes.
             if let Some(timeout) = timeout_secs {
-                let _ = tokio::time::timeout(Duration::from_secs(timeout), async {
+                let is_inspect_ok = tokio::time::timeout(Duration::from_secs(timeout), async {
                     loop {
                         if let Ok(inspect_result) = docker.inspect_exec(&create_exec_results.id).await {
                             if inspect_result.running != Some(true) {
-                                break;
+                                return true
                             }
                             // Continue to check if the execution finishes.
                         } else {
                             // Fail to inspect. The loop should be terminated.
-                            break;
+                            return false
                         }
                     }
                 })
-                .await;
+                .await
+                .map_err(|_| Error::BuildTimeout)?;
+                if !is_inspect_ok {
+                    return Err(Error::BuildFailureWithLogs(log_outputs))
+                }
             }
 
             return Ok(log_outputs)
         },
         bollard::exec::StartExecResults::Detached => {
-            return Err(bollard::errors::Error::DockerStreamError {
-                error: "Execution Result Not Attached".to_string(),
-            });
+            return Err(Error::BuildFailure("Execution Result Not Attached".to_string()));
         }
     }
 }
