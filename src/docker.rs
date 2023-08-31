@@ -431,6 +431,8 @@ async fn execute(
                             // Fail to inspect. The loop should be terminated.
                             return false
                         }
+                        // A small delay to avoid hitting docker endpoint immediately.
+                        tokio::time::sleep(Duration::from_millis(20)).await;
                     }
                 })
                 .await

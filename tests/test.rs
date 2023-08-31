@@ -88,15 +88,22 @@ async fn build_contract_without_docker() {
         .join("tests")
         .join("contracts")
         .to_path_buf();
-    let wasm_name = pchain_compile::Config {
+    let run_result = pchain_compile::Config {
         source_path,
         destination_path: Some(destination_path.clone()),
         build_options: BuildOptions { locked: true },
         docker_option: DockerOption::Dockerless,
     }
-    .run()
-    .await
-    .unwrap();
+    .run() 
+    .await;
+
+    let wasm_name = match run_result {
+        Ok(wasm_name) => wasm_name,
+        Err(e) => {
+            println!("{:?}", e);
+            panic!("Note: This test require installation of target 'wasm32-unknown-unknown'. It can be installed by 'rustup add wasm32-unknown-unknown'");
+        }
+    };
 
     assert!(destination_path.join("Cargo.lock").exists());
     let _ = std::fs::remove_file(destination_path.join(&wasm_name));
