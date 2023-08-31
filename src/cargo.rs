@@ -68,7 +68,9 @@ pub(crate) fn build_contract(
         return Err(Error::BuildFailureWithLogs(config.logs()))
     }
 
-    // Save Cargo.lock to output folder if applicable
+    // Save Cargo.lock to output folder: If option '--locked' is enabled, the Cargo.lock file 
+    // is the file provided by user, otherwise, the Cargo.lock file is the one generated during
+    // "cargo build".
     if locked {
         let _ = std::fs::copy(source_path.join("Cargo.lock"), output_path.join("Cargo.lock"));
     }
@@ -124,8 +126,8 @@ impl CargoConfig {
     pub fn new() -> Self {
         // Setup a shell that stores logs in memory.
         let logs = Arc::new(Mutex::new(Vec::<String>::new()));
-        let log_writter = BuildLogWritter { buffer: logs.clone() };
-        let shell = cargo::core::Shell::from_write(Box::new(log_writter));
+        let log_writer = BuildLogWriter { buffer: logs.clone() };
+        let shell = cargo::core::Shell::from_write(Box::new(log_writer));
 
         // Setup Cargo configuration with the custom shell.
         let current_dir = std::env::current_dir().unwrap();
@@ -159,11 +161,11 @@ impl std::ops::DerefMut for CargoConfig {
 /// Implements [std::io::Write] and be used by Cargo. It stores the 
 /// output logs during cargo building process.
 #[derive(Default)]
-pub struct BuildLogWritter {
+pub struct BuildLogWriter {
     pub buffer: Arc<Mutex<Vec<String>>>
 }
 
-impl Write for BuildLogWritter {
+impl Write for BuildLogWriter {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         if let Ok(ref mut mutex) = self.buffer.try_lock() {
             mutex.push(String::from_utf8_lossy(buf).to_string());
