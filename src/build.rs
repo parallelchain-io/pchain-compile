@@ -31,21 +31,26 @@ use std::{collections::HashSet, path::PathBuf};
 use std::fs;
 
 use crate::error::Error;
-use crate::DockerConfig;
+use crate::{DockerConfig, BuildOptions};
 
 /// `build_target` takes the path to the cargo manifest file(s), generates an optimized WASM binary(ies) after building
 /// the source code and saves the binary(ies) to the designated destination_path.
+/// 
+/// This method is equivalent to run the command:
+/// 
+/// `pchain_compile` build --source `source_path` --destination `destination_path`
 pub async fn build_target(
     source_path: PathBuf,
     destination_path: Option<PathBuf>,
 ) -> Result<String, Error> {
-    build_target_with_docker(source_path, destination_path, DockerConfig::default()).await
+    build_target_with_docker(source_path, destination_path, BuildOptions::default(), DockerConfig::default()).await
 }
 
 /// Validates inputs and trigger building process that uses docker.
 pub(crate) async fn build_target_with_docker(
     source_path: PathBuf,
     destination_path: Option<PathBuf>,
+    options: BuildOptions,
     docker_config: DockerConfig,
 ) -> Result<String, Error> {
     // create destination directory if it does not exist.
@@ -69,13 +74,14 @@ pub(crate) async fn build_target_with_docker(
         return Err(Error::UnkownDockerImageTag(docker_image_tag));
     }
 
-    build_target_in_docker(source_path, destination_path, docker_image_tag, wasm_file).await
+    build_target_in_docker(source_path, destination_path, options, docker_image_tag, wasm_file).await
 }
 
 /// Validates inputs and trigger building process that does not use docker.
 pub(crate) async fn build_target_without_docker(
     source_path: PathBuf,
     destination_path: Option<PathBuf>,
+    options: BuildOptions,
 ) -> Result<String, Error> {
     // create destination directory if it does not exist.
     if let Some(dst_path) = &destination_path {
@@ -90,7 +96,7 @@ pub(crate) async fn build_target_without_docker(
         crate::manifests::package_name(&source_path).map_err(|_| Error::InvalidSourcePath)?;
     let wasm_file = format!("{package_name}.wasm").replace('-', "_");
 
-    build_target_by_cargo(source_path, destination_path, wasm_file).await
+    build_target_by_cargo(source_path, destination_path, options, wasm_file).await
 }
 
 fn validated_source_path(source_path: PathBuf) -> Result<PathBuf, Error> {
@@ -104,6 +110,7 @@ fn validated_source_path(source_path: PathBuf) -> Result<PathBuf, Error> {
 async fn build_target_in_docker(
     source_path: PathBuf,
     destination_path: Option<PathBuf>,
+    options: BuildOptions,
     docker_image_tag: String,
     wasm_file: String,
 ) -> Result<String, Error> {
@@ -124,6 +131,7 @@ async fn build_target_in_docker(
         dependencies,
         source_path,
         destination_path,
+        options,
         &wasm_file,
     )
     .await;
@@ -141,6 +149,7 @@ async fn compile_contract_in_docker_container(
     dependencies: impl IntoIterator<Item = String>,
     source_path: PathBuf,
     destination_path: Option<PathBuf>,
+    options: BuildOptions,
     wasm_file: &str,
 ) -> Result<(), Error> {
     // Step 1. create dependency directory and copy source to docker
@@ -152,10 +161,11 @@ async fn compile_contract_in_docker_container(
     crate::docker::copy_files(docker, container_name, source_path.to_str().unwrap()).await?;
 
     // Step 3: build the source code inside docker
-    let result_in_docker = crate::docker::build_contracts(
+    let (result_in_docker, build_log) = crate::docker::build_contracts(
         docker,
         container_name,
-        source_path.to_str().unwrap(),
+        source_path,
+        options.locked,
         wasm_file,
     )
     .await?;
@@ -166,6 +176,7 @@ async fn compile_contract_in_docker_container(
         container_name,
         &result_in_docker,
         destination_path.clone(),
+        build_log
     )
     .await?;
 
@@ -177,6 +188,7 @@ async fn compile_contract_in_docker_container(
 async fn build_target_by_cargo(
     source_path: PathBuf,
     destination_path: Option<PathBuf>,
+    options: BuildOptions,
     wasm_file: String,
 ) -> Result<String, Error> {
     // 1. Create temporary folder as a working directory for cargo build
@@ -188,6 +200,7 @@ async fn build_target_by_cargo(
         &temp_dir,
         source_path.as_path(),
         destination_path,
+        options.locked,
         &wasm_file,
     );
 

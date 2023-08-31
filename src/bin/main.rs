@@ -8,7 +8,7 @@
 //! in a docker environment.
 
 use clap::Parser;
-use pchain_compile::{config::Config, DockerConfig, DockerOption};
+use pchain_compile::{config::Config, DockerConfig, DockerOption, BuildOptions};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Parser)]
@@ -21,7 +21,7 @@ use std::path::{Path, PathBuf};
     long_about = None
 )]
 enum PchainCompile {
-    /// Build the source code. Please make sure:
+    /// Build the source code. By default, it uses docker for building the contract. Please make sure:
     /// 1. Docker is installed and its execution permission under current user is granted.
     /// 2. Internet is reachable. (for pulling the docker image from docker hub)
     #[clap(arg_required_else_help = true, display_order = 1, verbatim_doc_comment)]
@@ -35,16 +35,26 @@ enum PchainCompile {
         #[clap(long = "destination", display_order = 2, verbatim_doc_comment)]
         destination_path: Option<PathBuf>,
 
+        /// Build with the version-locked dependencies. If the source code directory contains the file "Cargo.lock",
+        /// the contract will be built with the dependencies specified in the file. It is equivalent to
+        /// running "cargo build" with the flag "--locked". If the file does not exist, the building process continues
+        /// without using the version-locked dependencies.
+        /// 
+        /// With or without the file "Cargo.lock", the compilation output includes the file "Cargo.lock" which was used or
+        /// generated in the building process.
+        #[clap(long = "locked", display_order = 3, verbatim_doc_comment)]
+        locked: bool,
+
         /// Compile contract without using docker. This option requires installation of Rust and target "wasm32-unknown-unknown".
         /// **Please note the compiled contracts are not always consistent with the previous compiled ones, because the building 
         /// process happens in your local changing environment.**
         /// 
-        /// To install target "wasm32-unknown-unkown", run the following command:
+        /// To install target "wasm32-unknown-unknown", run the following command:
         ///
         /// $ rustup target add wasm32-unknown-unknown
         #[clap(
             long = "dockerless",
-            display_order = 3,
+            display_order = 4,
             verbatim_doc_comment,
             group = "docker-option"
         )]
@@ -58,7 +68,7 @@ enum PchainCompile {
         /// - 0.4.2
         #[clap(
             long = "use-docker-tag",
-            display_order = 4,
+            display_order = 5,
             verbatim_doc_comment,
             group = "docker-option"
         )]
@@ -73,6 +83,7 @@ async fn main() {
         PchainCompile::Build {
             source_path,
             destination_path,
+            locked,
             dockerless,
             docker_image_tag,
         } => {
@@ -82,6 +93,10 @@ async fn main() {
             }
             println!("Build process started. This could take several minutes for large contracts.");
 
+            let build_options = BuildOptions {
+                locked
+            };
+            
             let docker_option = if dockerless {
                 DockerOption::Dockerless
             } else {
@@ -96,6 +111,7 @@ async fn main() {
                 let config = Config {
                     source_path,
                     destination_path: destination_path.clone(),
+                    build_options: build_options.clone(),
                     docker_option: docker_option.clone(),
                 };
 

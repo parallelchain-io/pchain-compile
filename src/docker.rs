@@ -9,7 +9,7 @@
 use std::{
     io::{Read, Write},
     ops::Not,
-    path::{Path, PathBuf},
+    path::{Path, PathBuf}, time::Duration,
 };
 
 use bollard::{
@@ -32,10 +32,11 @@ use std::fs::File;
 use crate::error::Error;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 
-/// List of docker image tags that can be used. 
-pub(crate) const PCHAIN_COMPILE_IMAGE_TAGS: [&str; 2] = ["mainnet01", env!("CARGO_PKG_VERSION")];
+/// List of docker image tags that can be used. The first (0-indexed) is the default one. 
+pub(crate) const PCHAIN_COMPILE_IMAGE_TAGS: [&str; 2] = [env!("CARGO_PKG_VERSION"), "mainnet01"];
 /// The repo name in Parallelchain Lab Dockerhub: https://hub.docker.com/r/parallelchainlab/pchain_compile
 pub(crate) const PCHAIN_COMPILE_IMAGE: &str = "parallelchainlab/pchain_compile";
+const DOCKER_EXEC_TIME_LIMIT: u64 = 15; // secs. It is a time limit to normal docker execution (except cargo build).
 
 /// Generate a random Docker container name
 pub fn random_container_name() -> String {
@@ -164,6 +165,7 @@ pub async fn copy_files_from(
     container_name: &str,
     container_path: &str,
     specified_output_path: Option<PathBuf>,
+    build_log: String,
 ) -> Result<(), Error> {
     let download_option = DownloadFromContainerOptions {
         path: container_path,
@@ -179,7 +181,7 @@ pub async fn copy_files_from(
     let files_content = files_from_tar_gz(compressed_data)?;
 
     if files_content.is_empty() {
-        return Err(Error::BuildFailure("Fail to build contract. Please ensure there is no compilation error in the source code.".to_string()));
+        return Err(Error::BuildFailureWithLogs(build_log));
     }
 
     // Save to destination
@@ -198,34 +200,57 @@ pub async fn copy_files_from(
 }
 
 /// Build contract by executing commands in docker container, including `Cargo`, `wasm-opt` and `wasm-snip`.
+/// Return the output folder path and the build logs if success.
 pub async fn build_contracts(
     docker: &Docker,
     container_name: &str,
-    source_path: &str,
+    source_path: PathBuf,
+    locked: bool,
     wasm_file: &str,
-) -> Result<String, Error> {
-    let source_path = source_path
+) -> Result<(String, String), Error> {
+    let source_path_str = source_path.to_str().unwrap()
         .replace(':', "")
         .replace('\\', "/")
         .replace(' ', "_");
-    let working_folder_code = format!("/{source_path}").to_string();
+    let working_folder_code = format!("/{source_path_str}").to_string();
     let working_folder_build =
-        format!("/{source_path}/target/wasm32-unknown-unknown/release").to_string();
+        format!("/{source_path_str}/target/wasm32-unknown-unknown/release").to_string();
     let output_folder = "/result";
     let output_file = format!("{output_folder}/{wasm_file}").to_string();
 
-    let cmds = vec![
-        (
-            &working_folder_code,
-            vec![
-                "cargo",
-                "build",
-                "--target",
-                "wasm32-unknown-unknown",
-                "--release",
-                "--quiet",
-            ],
-        ),
+    // Does not set "--locked" if the Cargo.lock file does not exist.
+    let use_cargo_lock = locked && source_path.join("Cargo.lock").exists();
+    let cmd_cargo_build = if use_cargo_lock {
+        vec![
+            "cargo",
+            "build",
+            "--locked",
+            "--target",
+            "wasm32-unknown-unknown",
+            "--release",
+        ]
+    } else {
+        vec![
+            "cargo",
+            "build",
+            "--target",
+            "wasm32-unknown-unknown",
+            "--release",
+        ]
+    };
+
+    let build_log = execute(
+        docker,
+        container_name,
+        Some(&working_folder_code),
+        cmd_cargo_build,
+        true,
+        None
+    )
+    .await
+    .map_err(|e| Error::BuildFailure(e.to_string()))?;
+
+    let mut cmds = vec![
         (
             &working_folder_build,
             vec!["chmod", "+x", "/root/bin/wasm-opt"],
@@ -268,13 +293,30 @@ pub async fn build_contracts(
         ),
     ];
 
-    for (working_dir, cmd) in cmds {
-        execute(docker, container_name, Some(working_dir), cmd)
-            .await
-            .map_err(|e| Error::BuildFailure(e.to_string()))?;
+    // Save Cargo.lock to output folder if applicable
+    if locked {
+        cmds.push(
+            (
+                &working_folder_code,
+                vec!["mv", "Cargo.lock", output_folder]
+            )
+        );
     }
 
-    Ok(output_folder.to_string())
+    for (working_dir, cmd) in cmds {
+        execute(
+            docker,
+            container_name,
+            Some(working_dir),
+            cmd,
+            false,
+            Some(DOCKER_EXEC_TIME_LIMIT)
+        )
+        .await
+        .map_err(|e| Error::BuildFailure(e.to_string()))?;
+    }
+
+    Ok((output_folder.to_string(), build_log))
 }
 
 /// Force stop and remove a container
@@ -333,7 +375,9 @@ async fn execute(
     container_name: &str,
     working_dir: Option<&str>,
     cmd: Vec<&str>,
-) -> Result<(), bollard::errors::Error> {
+    log_output: bool,
+    timeout_secs: Option<u64>
+) -> Result<String, Error> {
     let create_exec_results = docker
         .create_exec(
             container_name,
@@ -345,7 +389,8 @@ async fn execute(
                 ..Default::default()
             },
         )
-        .await?;
+        .await
+        .map_err(|e| Error::BuildFailure(e.to_string()))?;
 
     let start_exec_results = docker
         .start_exec(
@@ -355,15 +400,52 @@ async fn execute(
                 ..Default::default()
             }),
         )
-        .await?;
+        .await
+        .map_err(|e| Error::BuildFailure(e.to_string()))?;
 
-    if let bollard::exec::StartExecResults::Attached { output, .. } = start_exec_results {
-        let _output = output.try_collect::<Vec<_>>().await?;
-    } else {
-        return Err(bollard::errors::Error::DockerStreamError {
-            error: "Execution Result Not Attached".to_string(),
-        });
+    match start_exec_results {
+        bollard::exec::StartExecResults::Attached { output, .. } => {
+            let log_outputs =
+            if log_output {
+                output.try_collect::<Vec<_>>()
+                    .await
+                    .map_err(|e| Error::BuildFailure(e.to_string()))?
+                    .into_iter()
+                    .map(|output| output.to_string() )
+                    .collect()
+            } else {
+                Vec::new()
+            }
+            .join("");
+
+            // Wait until the execution finishes.
+            if let Some(timeout) = timeout_secs {
+                let is_inspect_ok = tokio::time::timeout(Duration::from_secs(timeout), async {
+                    loop {
+                        if let Ok(inspect_result) = docker.inspect_exec(&create_exec_results.id).await {
+                            if inspect_result.running != Some(true) {
+                                return true
+                            }
+                            // Continue to check if the execution finishes.
+                        } else {
+                            // Fail to inspect. The loop should be terminated.
+                            return false
+                        }
+                        // A small delay to avoid hitting docker endpoint immediately.
+                        tokio::time::sleep(Duration::from_millis(20)).await;
+                    }
+                })
+                .await
+                .map_err(|_| Error::BuildTimeout)?;
+                if !is_inspect_ok {
+                    return Err(Error::BuildFailureWithLogs(log_outputs))
+                }
+            }
+
+            return Ok(log_outputs)
+        },
+        bollard::exec::StartExecResults::Detached => {
+            return Err(Error::BuildFailure("Execution Result Not Attached".to_string()));
+        }
     }
-
-    Ok(())
 }
