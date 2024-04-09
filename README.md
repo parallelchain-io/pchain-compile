@@ -73,10 +73,10 @@ There are different tags of the docker image. They vary on the versions of the c
 |0.4.2 | 1.71.0 | 0.4.0 | 114 |
 |mainnet01 | 1.66.1 | 0.4.0 | 109 |
 
-To build smart contract in a specific docker environment, run with argument **--user-docker-tag**. For example,
+To build smart contract in a specific docker environment, run with argument **use-docker-tag**. For example,
 
 ```sh
 pchain_compile build --source /home/user/contract --destination /home/user/result --use-docker-tag 0.4.3
 ```
 
-If **--user-docker-tag** is not used, the tag being used is with the same version as `pchain_compile`.
+If **use-docker-tag** is not used, the tag being used is with the same version as `pchain_compile`.
