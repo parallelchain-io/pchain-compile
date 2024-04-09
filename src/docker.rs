@@ -61,10 +61,7 @@ pub async fn pull_image(docker: &Docker, tag: &str) -> Result<String, Error> {
         )
         .try_collect::<Vec<_>>()
         .await
-        .map_err(|e| {
-            println!("{e:?}");
-            Error::DockerDaemonFailure
-})?;
+        .map_err(|_| Error::DockerDaemonFailure)?;
 
     if create_image_infos.is_empty() || create_image_infos.first().unwrap().error.is_some() {
         return Err(Error::DockerDaemonFailure);
