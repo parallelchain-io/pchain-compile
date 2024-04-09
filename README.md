@@ -59,5 +59,6 @@ The docker images utilize a toolchain whose versions of each component are shown
 
 |Image Tag |rustc |wasm-snip |wasm-opt |
 |:---|:---|:---|:---|
-|0.4.2 |1.71.0 |0.4.0 |114 |
-|mainnet01 |1.66.1 |0.4.0 |109 |
+|0.4.3 | 1.77.1 | 0.4.0| 114|
+|0.4.2 | 1.71.0 | 0.4.0 | 114 |
+|mainnet01 | 1.66.1 | 0.4.0 | 109 |

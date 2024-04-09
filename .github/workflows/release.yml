@@ -21,7 +21,7 @@ jobs:
       matrix:
         include:
           - target: x86_64-unknown-linux-gnu
-            os: ubuntu-20.04
+            os: ubuntu-22.04
             rust: stable
           - target: x86_64-apple-darwin
             os: macos-12
@@ -63,7 +63,7 @@ jobs:
           mkdir -p ${{ env.RELEASE_DIR }}/${{ env.RELEASE_BIN }}-${{ steps.get_version.outputs.VERSION }}-${{ matrix.target }}
       
       - name: Move binaries (Linux/MacOS)
-        if: matrix.os == 'ubuntu-20.04' || matrix.os == 'macos-12'
+        if: matrix.os == 'ubuntu-22.04' || matrix.os == 'macos-12'
         run: |
           mv ./target/${{ matrix.target }}/release/${{ env.RELEASE_BIN }} ${{ env.RELEASE_DIR }}/${{ env.RELEASE_BIN }}-${{ steps.get_version.outputs.VERSION }}-${{ matrix.target }}/${{ env.RELEASE_BIN }}
       

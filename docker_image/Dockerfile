@@ -1,4 +1,4 @@
-FROM rust:1.71.0 as cache
+FROM rust:1.77.1 as cache
 
 # Extract and compile wasm-opt & install wasm-snip
 RUN apt update && apt-get -y install wget && \
@@ -7,7 +7,7 @@ RUN apt update && apt-get -y install wget && \
     rm -rf binaryen-version_114*
 
 # pchain-compile base image
-FROM rust:1.71.0 as base-image
+FROM rust:1.77.1 as base-image
 
 # Setup rust with wasm support
 RUN cargo install wasm-snip && rustup target add wasm32-unknown-unknown && mkdir -p /root/bin
