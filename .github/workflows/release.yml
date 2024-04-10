@@ -10,7 +10,7 @@ env:
   RELEASE_DIR: artifacts
   GITHUB_REF: '${{ github.ref }}'
   WINDOWS_TARGET: x86_64-pc-windows-msvc
-  MACOS_TARGET: x86_64-apple-darwin
+  MACOS_TARGET: aarch64-apple-darwin
   LINUX_TARGET: x86_64-unknown-linux-gnu
 
 jobs:
@@ -23,8 +23,8 @@ jobs:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-22.04
             rust: stable
-          - target: x86_64-apple-darwin
-            os: macos-12
+          - target: aarch64-apple-darwin
+            os: macos-14
             rust: stable
           - target: x86_64-pc-windows-msvc
             os: windows-2022
@@ -44,7 +44,7 @@ jobs:
           echo ::set-output name=version::"${GITHUB_REF:10}"
       
       - name: Install p7zip (MacOS)
-        if: matrix.os == 'macos-12'
+        if: matrix.os == 'macos-14'
         run: brew install p7zip
       
       - name: Add rustup target
@@ -63,7 +63,7 @@ jobs:
           mkdir -p ${{ env.RELEASE_DIR }}/${{ env.RELEASE_BIN }}-${{ steps.get_version.outputs.VERSION }}-${{ matrix.target }}
       
       - name: Move binaries (Linux/MacOS)
-        if: matrix.os == 'ubuntu-22.04' || matrix.os == 'macos-12'
+        if: matrix.os == 'ubuntu-22.04' || matrix.os == 'macos-14'
         run: |
           mv ./target/${{ matrix.target }}/release/${{ env.RELEASE_BIN }} ${{ env.RELEASE_DIR }}/${{ env.RELEASE_BIN }}-${{ steps.get_version.outputs.VERSION }}-${{ matrix.target }}/${{ env.RELEASE_BIN }}
       
