@@ -66,6 +66,7 @@ enum PchainCompile {
         /// Available tags:
         /// - mainnet01
         /// - 0.4.2
+        /// - 0.4.3
         #[clap(
             long = "use-docker-tag",
             display_order = 5,
