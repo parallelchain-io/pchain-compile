@@ -31,19 +31,25 @@ use std::{collections::HashSet, path::PathBuf};
 use std::fs;
 
 use crate::error::Error;
-use crate::{DockerConfig, BuildOptions};
+use crate::{BuildOptions, DockerConfig};
 
 /// `build_target` takes the path to the cargo manifest file(s), generates an optimized WASM binary(ies) after building
 /// the source code and saves the binary(ies) to the designated destination_path.
-/// 
+///
 /// This method is equivalent to run the command:
-/// 
+///
 /// `pchain_compile` build --source `source_path` --destination `destination_path`
 pub async fn build_target(
     source_path: PathBuf,
     destination_path: Option<PathBuf>,
 ) -> Result<String, Error> {
-    build_target_with_docker(source_path, destination_path, BuildOptions::default(), DockerConfig::default()).await
+    build_target_with_docker(
+        source_path,
+        destination_path,
+        BuildOptions::default(),
+        DockerConfig::default(),
+    )
+    .await
 }
 
 /// Validates inputs and trigger building process that uses docker.
@@ -74,7 +80,14 @@ pub(crate) async fn build_target_with_docker(
         return Err(Error::UnkownDockerImageTag(docker_image_tag));
     }
 
-    build_target_in_docker(source_path, destination_path, options, docker_image_tag, wasm_file).await
+    build_target_in_docker(
+        source_path,
+        destination_path,
+        options,
+        docker_image_tag,
+        wasm_file,
+    )
+    .await
 }
 
 /// Validates inputs and trigger building process that does not use docker.
@@ -152,14 +165,15 @@ async fn compile_contract_in_docker_container(
     options: BuildOptions,
     wasm_file: &str,
 ) -> Result<(), Error> {
+    log::debug!("Start to copy dependencies to docker...");
     // Step 1. create dependency directory and copy source to docker
     for dependency in dependencies {
         crate::docker::copy_files(docker, container_name, &dependency).await?;
     }
-
+    log::debug!("Start to copy source code files to docker...");
     // Step 2: create directory paths inside docker and  copy file to container
     crate::docker::copy_files(docker, container_name, source_path.to_str().unwrap()).await?;
-
+    log::debug!("Start to build source code inside docker...");
     // Step 3: build the source code inside docker
     let (result_in_docker, build_log) = crate::docker::build_contracts(
         docker,
@@ -169,21 +183,24 @@ async fn compile_contract_in_docker_container(
         wasm_file,
     )
     .await?;
-
+    log::debug!(
+        "Finished build, start to copy {:?} file from docker",
+        wasm_file
+    );
     // Step 4: copy file from docker to given location
     crate::docker::copy_files_from(
         docker,
         container_name,
         &result_in_docker,
         destination_path.clone(),
-        build_log
+        build_log,
     )
     .await?;
-
+    log::debug!("Finished copy file {:?} from docker", wasm_file);
     Ok(())
 }
 
-/// Setup filesystem and build contract by cargo. It manages to create a temporary workding folder and 
+/// Setup filesystem and build contract by cargo. It manages to create a temporary workding folder and
 /// remove it after call.
 async fn build_target_by_cargo(
     source_path: PathBuf,

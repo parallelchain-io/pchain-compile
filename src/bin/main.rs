@@ -8,7 +8,7 @@
 //! in a docker environment.
 
 use clap::Parser;
-use pchain_compile::{config::Config, DockerConfig, DockerOption, BuildOptions};
+use pchain_compile::{config::Config, BuildOptions, DockerConfig, DockerOption};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Parser)]
@@ -39,16 +39,16 @@ enum PchainCompile {
         /// the contract will be built with the dependencies specified in the file. It is equivalent to
         /// running "cargo build" with the flag "--locked". If the file does not exist, the building process continues
         /// without using the version-locked dependencies.
-        /// 
+        ///
         /// With or without the file "Cargo.lock", the compilation output includes the file "Cargo.lock" which was used or
         /// generated in the building process.
         #[clap(long = "locked", display_order = 3, verbatim_doc_comment)]
         locked: bool,
 
         /// Compile contract without using docker. This option requires installation of Rust and target "wasm32-unknown-unknown".
-        /// **Please note the compiled contracts are not always consistent with the previous compiled ones, because the building 
+        /// **Please note the compiled contracts are not always consistent with the previous compiled ones, because the building
         /// process happens in your local changing environment.**
-        /// 
+        ///
         /// To install target "wasm32-unknown-unknown", run the following command:
         ///
         /// $ rustup target add wasm32-unknown-unknown
@@ -79,6 +79,21 @@ enum PchainCompile {
 
 #[tokio::main]
 async fn main() {
+    fern::Dispatch::new()
+        .format(|out, message, record| {
+            out.finish(format_args!(
+                "{}[{}][{}] {}",
+                chrono::Local::now().format("[%H:%M:%S]"),
+                record.target(),
+                record.level(),
+                message
+            ))
+        })
+        .level(log::LevelFilter::Info)
+        .level_for("pchain_compile", log::LevelFilter::Debug)
+        .chain(std::io::stdout())
+        .apply()
+        .unwrap();
     let args = PchainCompile::parse();
     match args {
         PchainCompile::Build {
@@ -94,10 +109,8 @@ async fn main() {
             }
             println!("Build process started. This could take several minutes for large contracts.");
 
-            let build_options = BuildOptions {
-                locked
-            };
-            
+            let build_options = BuildOptions { locked };
+
             let docker_option = if dockerless {
                 DockerOption::Dockerless
             } else {

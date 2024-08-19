@@ -7,9 +7,12 @@
 //! copying files to container and executing commands inside docker.
 
 use std::{
+    ffi::OsStr,
+    fs,
     io::{Read, Write},
     ops::Not,
-    path::{Path, PathBuf}, time::Duration,
+    path::{Path, PathBuf},
+    time::Duration,
 };
 
 use bollard::{
@@ -32,8 +35,9 @@ use std::fs::File;
 use crate::error::Error;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 
-/// List of docker image tags that can be used. The first (0-indexed) is the default one. 
-pub(crate) const PCHAIN_COMPILE_IMAGE_TAGS: [&str; 3] = [env!("CARGO_PKG_VERSION"), "0.4.2", "mainnet01"];
+/// List of docker image tags that can be used. The first (0-indexed) is the default one.
+pub(crate) const PCHAIN_COMPILE_IMAGE_TAGS: [&str; 3] =
+    [env!("CARGO_PKG_VERSION"), "0.4.2", "mainnet01"];
 /// The repo name in Parallelchain Lab Dockerhub: https://hub.docker.com/r/parallelchainlab/pchain_compile
 pub(crate) const PCHAIN_COMPILE_IMAGE: &str = "parallelchainlab/pchain_compile";
 const DOCKER_EXEC_TIME_LIMIT: u64 = 15; // secs. It is a time limit to normal docker execution (except cargo build).
@@ -122,16 +126,23 @@ pub async fn copy_files(
     let src_path = Path::new(source_path).to_path_buf();
     let dst_path = Path::new(
         format!(
-            "{}-{}.tar.gz",
+            "/tmp/{}-{}.tar.gz",
             container_name,
             src_path.file_name().unwrap().to_str().unwrap()
         )
         .as_str(),
     )
     .to_path_buf();
-
-    create_tar_gz(src_path, &save_to_path, &dst_path).map_err(|_| Error::DockerDaemonFailure)?;
-
+    log::debug!(
+        "Creating temporary compression file {:?} ...",
+        dst_path.to_str().unwrap_or_default()
+    );
+    create_tar_gz(src_path, &save_to_path, &dst_path)
+        .map_err(|err| Error::BuildFailure(err.to_string()))?;
+    log::debug!(
+        "Finished temporary compression file {:?} creation, and start to copy file to docker container...",
+        dst_path.to_str().unwrap_or_default()
+    );
     // Read Content
     let file_content = File::open(dst_path.clone())
         .map(|mut file| {
@@ -152,10 +163,16 @@ pub async fn copy_files(
             file_content.into(),
         )
         .await;
-
+    log::debug!(
+        "Finished compression file {:?} copy, and start delete the temp compression file...",
+        dst_path.to_str().unwrap_or_default()
+    );
     // Remove file
     let _ = std::fs::remove_file(&dst_path); // remove the compressed file .tar.gz
-
+    log::debug!(
+        "{:?} has been deleted...",
+        dst_path.to_str().unwrap_or_default()
+    );
     result.map_err(|_| Error::DockerDaemonFailure)
 }
 
@@ -208,7 +225,9 @@ pub async fn build_contracts(
     locked: bool,
     wasm_file: &str,
 ) -> Result<(String, String), Error> {
-    let source_path_str = source_path.to_str().unwrap()
+    let source_path_str = source_path
+        .to_str()
+        .unwrap()
         .replace(':', "")
         .replace('\\', "/")
         .replace(' ', "_");
@@ -245,7 +264,7 @@ pub async fn build_contracts(
         Some(&working_folder_code),
         cmd_cargo_build,
         true,
-        None
+        None,
     )
     .await
     .map_err(|e| Error::BuildFailure(e.to_string()))?;
@@ -295,12 +314,10 @@ pub async fn build_contracts(
 
     // Save Cargo.lock to output folder if applicable
     if locked {
-        cmds.push(
-            (
-                &working_folder_code,
-                vec!["mv", "Cargo.lock", output_folder]
-            )
-        );
+        cmds.push((
+            &working_folder_code,
+            vec!["mv", "Cargo.lock", output_folder],
+        ));
     }
 
     for (working_dir, cmd) in cmds {
@@ -310,7 +327,7 @@ pub async fn build_contracts(
             Some(working_dir),
             cmd,
             false,
-            Some(DOCKER_EXEC_TIME_LIMIT)
+            Some(DOCKER_EXEC_TIME_LIMIT),
         )
         .await
         .map_err(|e| Error::BuildFailure(e.to_string()))?;
@@ -341,8 +358,48 @@ fn create_tar_gz(
     let tar_gz = File::create(dst_path)?;
     let enc = GzEncoder::new(tar_gz, Compression::default());
     let mut tar = tar::Builder::new(enc);
-    tar.append_dir_all(tar_path, src_path)?;
-    tar.finish()
+    // ignore the "/target" if exists
+    if src_path.is_dir() {
+        for entry in fs::read_dir(src_path.clone())? {
+            let entry = entry?;
+            let file_type = entry.file_type()?;
+            if file_type.is_dir() && entry.file_name().eq(&OsStr::new("target")) {
+                log::debug!("Ignored target directory");
+                continue;
+            } else {
+                let full_path_of_entry = src_path.join(entry.file_name());
+                if file_type.is_dir() {
+                    tar.append_dir_all(
+                        full_path_of_entry
+                            .clone()
+                            .to_str()
+                            .unwrap()
+                            .trim_start_matches("/"),
+                        full_path_of_entry,
+                    )?;
+                } else if file_type.is_file() {
+                    let mut file = File::open(full_path_of_entry.clone())?;
+                    tar.append_file(
+                        full_path_of_entry
+                            .clone()
+                            .to_str()
+                            .unwrap()
+                            .trim_start_matches("/"),
+                        &mut file,
+                    )?;
+                } else if file_type.is_symlink() {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        "Smart Contract directory should not include symbolic or hard link!!!",
+                    ));
+                }
+            }
+        }
+        tar.finish()
+    } else {
+        tar.append_dir_all(tar_path, src_path)?;
+        tar.finish()
+    }
 }
 
 fn files_from_tar_gz(tar_gz_bytes: Vec<u8>) -> Result<Vec<(String, Vec<u8>)>, Error> {
@@ -376,7 +433,7 @@ async fn execute(
     working_dir: Option<&str>,
     cmd: Vec<&str>,
     log_output: bool,
-    timeout_secs: Option<u64>
+    timeout_secs: Option<u64>,
 ) -> Result<String, Error> {
     let create_exec_results = docker
         .create_exec(
@@ -405,13 +462,13 @@ async fn execute(
 
     match start_exec_results {
         bollard::exec::StartExecResults::Attached { output, .. } => {
-            let log_outputs =
-            if log_output {
-                output.try_collect::<Vec<_>>()
+            let log_outputs = if log_output {
+                output
+                    .try_collect::<Vec<_>>()
                     .await
                     .map_err(|e| Error::BuildFailure(e.to_string()))?
                     .into_iter()
-                    .map(|output| output.to_string() )
+                    .map(|output| output.to_string())
                     .collect()
             } else {
                 Vec::new()
@@ -422,14 +479,16 @@ async fn execute(
             if let Some(timeout) = timeout_secs {
                 let is_inspect_ok = tokio::time::timeout(Duration::from_secs(timeout), async {
                     loop {
-                        if let Ok(inspect_result) = docker.inspect_exec(&create_exec_results.id).await {
+                        if let Ok(inspect_result) =
+                            docker.inspect_exec(&create_exec_results.id).await
+                        {
                             if inspect_result.running != Some(true) {
-                                return true
+                                return true;
                             }
                             // Continue to check if the execution finishes.
                         } else {
                             // Fail to inspect. The loop should be terminated.
-                            return false
+                            return false;
                         }
                         // A small delay to avoid hitting docker endpoint immediately.
                         tokio::time::sleep(Duration::from_millis(20)).await;
@@ -438,14 +497,16 @@ async fn execute(
                 .await
                 .map_err(|_| Error::BuildTimeout)?;
                 if !is_inspect_ok {
-                    return Err(Error::BuildFailureWithLogs(log_outputs))
+                    return Err(Error::BuildFailureWithLogs(log_outputs));
                 }
             }
 
-            return Ok(log_outputs)
-        },
+            return Ok(log_outputs);
+        }
         bollard::exec::StartExecResults::Detached => {
-            return Err(Error::BuildFailure("Execution Result Not Attached".to_string()));
+            return Err(Error::BuildFailure(
+                "Execution Result Not Attached".to_string(),
+            ));
         }
     }
 }
