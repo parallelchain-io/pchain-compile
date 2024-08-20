@@ -9,7 +9,10 @@
 
 use clap::Parser;
 use pchain_compile::{config::Config, BuildOptions, DockerConfig, DockerOption};
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
 #[derive(Debug, Parser)]
 #[clap(
@@ -74,26 +77,20 @@ enum PchainCompile {
             group = "docker-option"
         )]
         docker_image_tag: Option<String>,
+
+        /// Set log level, default is Error
+        ///
+        /// Available log levels:
+        /// - Error
+        /// - Info
+        /// - Debug (provide compile progress information )
+        #[clap(long = "log-level", display_order = 6, verbatim_doc_comment)]
+        log_level: Option<String>,
     },
 }
 
 #[tokio::main]
 async fn main() {
-    fern::Dispatch::new()
-        .format(|out, message, record| {
-            out.finish(format_args!(
-                "{}[{}][{}] {}",
-                chrono::Local::now().format("[%H:%M:%S]"),
-                record.target(),
-                record.level(),
-                message
-            ))
-        })
-        .level(log::LevelFilter::Info)
-        .level_for("pchain_compile", log::LevelFilter::Debug)
-        .chain(std::io::stdout())
-        .apply()
-        .unwrap();
     let args = PchainCompile::parse();
     match args {
         PchainCompile::Build {
@@ -102,6 +99,7 @@ async fn main() {
             locked,
             dockerless,
             docker_image_tag,
+            log_level,
         } => {
             if source_path.is_empty() {
                 println!("Please provide at least one source!");
@@ -118,7 +116,24 @@ async fn main() {
                     tag: docker_image_tag,
                 })
             };
-
+            let log_level_filter = log_level.map_or(log::LevelFilter::Error, |level_str| {
+                log::LevelFilter::from_str(&level_str).unwrap()
+            });
+            fern::Dispatch::new()
+                .format(|out, message, record| {
+                    out.finish(format_args!(
+                        "{}[{}][{}] {}",
+                        chrono::Local::now().format("[%H:%M:%S]"),
+                        record.target(),
+                        record.level(),
+                        message
+                    ))
+                })
+                .level(log::LevelFilter::Error)
+                .level_for("pchain_compile", log_level_filter)
+                .chain(std::io::stdout())
+                .apply()
+                .unwrap();
             // Spawn threads to handle each contract code
             let mut join_handles = vec![];
             source_path.into_iter().for_each(|source_path| {

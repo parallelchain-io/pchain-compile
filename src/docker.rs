@@ -358,47 +358,54 @@ fn create_tar_gz(
     let tar_gz = File::create(dst_path)?;
     let enc = GzEncoder::new(tar_gz, Compression::default());
     let mut tar = tar::Builder::new(enc);
-    // ignore the "/target" if exists
     if src_path.is_dir() {
+        // iter the folder and copy all files or sub-directory except "/target" if exists
         for entry in fs::read_dir(src_path.clone())? {
             let entry = entry?;
             let file_type = entry.file_type()?;
             if file_type.is_dir() && entry.file_name().eq(&OsStr::new("target")) {
-                log::debug!("Ignored target directory");
+                log::debug!("Ignored /target directory");
                 continue;
             } else {
                 let full_path_of_entry = src_path.join(entry.file_name());
+                let full_path_of_entry_str = full_path_of_entry
+                    .to_str()
+                    .unwrap_or_default()
+                    .trim_start_matches("/")
+                    .to_owned();
                 if file_type.is_dir() {
-                    tar.append_dir_all(
-                        full_path_of_entry
-                            .clone()
-                            .to_str()
-                            .unwrap()
-                            .trim_start_matches("/"),
-                        full_path_of_entry,
-                    )?;
+                    tar.append_dir_all(full_path_of_entry_str, full_path_of_entry)?;
                 } else if file_type.is_file() {
                     let mut file = File::open(full_path_of_entry.clone())?;
-                    tar.append_file(
-                        full_path_of_entry
-                            .clone()
-                            .to_str()
-                            .unwrap()
-                            .trim_start_matches("/"),
-                        &mut file,
-                    )?;
+                    tar.append_file(full_path_of_entry_str, &mut file)?;
                 } else if file_type.is_symlink() {
                     return Err(std::io::Error::new(
                         std::io::ErrorKind::Other,
                         "Smart Contract directory should not include symbolic or hard link!!!",
                     ));
+                } else {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::Unsupported,
+                        "Smart Contract directory contains unrecognized file type!!!",
+                    ));
                 }
             }
         }
         tar.finish()
-    } else {
-        tar.append_dir_all(tar_path, src_path)?;
+    } else if src_path.is_file() {
+        let mut file = File::open(src_path)?;
+        tar.append_file(tar_path, &mut file)?;
         tar.finish()
+    } else if src_path.is_symlink() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Smart Contract dependencies should not include symbolic or hard link!!!",
+        ));
+    } else {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "Smart Contract dependencies contains unrecognized file type!!!",
+        ));
     }
 }
 
