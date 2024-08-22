@@ -67,11 +67,12 @@ To understand more about the commands and arguments, run `pchain_compile build -
 
 There are different tags of the docker image. They vary on the versions of the components. The table below describes the tags and their differences.
 
-|Image Tag |rustc |wasm-snip |wasm-opt |
-|:---|:---|:---|:---|
-|0.4.3 | 1.77.1 | 0.4.0| 114|
-|0.4.2 | 1.71.0 | 0.4.0 | 114 |
-|mainnet01 | 1.66.1 | 0.4.0 | 109 |
+| Image Tag | rustc  | wasm-snip | wasm-opt |
+| :-------- | :----- | :-------- | :------- |
+| latest    | 1.80.1 | 0.4.0     | 114      |
+| 0.4.3     | 1.77.1 | 0.4.0     | 114      |
+| 0.4.2     | 1.71.0 | 0.4.0     | 114      |
+| mainnet01 | 1.66.1 | 0.4.0     | 109      |
 
 To build a smart contract in a specific docker environment, run with argument **use-docker-tag**. For example,
 
@@ -79,4 +80,4 @@ To build a smart contract in a specific docker environment, run with argument **
 pchain_compile build --source /home/user/contract --destination /home/user/result --use-docker-tag 0.4.3
 ```
 
-If **use-docker-tag** is not used, the docker image tag is determined by the version of `pchain_compile`. For example, `pchain_compile` v0.4.3 will pull the docker image with tag `0.4.3`.
+If **use-docker-tag** is not used, will pull the docker image with tag `latest`.

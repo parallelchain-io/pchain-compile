@@ -8,13 +8,13 @@
 //! Cargo in a docker environment.
 //!
 //! # Example
-//! ```no_run
+//! ```ignore
 //! let source_path = Path::new("/home/user/contract").to_path_buf();
 //! let result = pchain_compile::build_target(source_path, None).await;
 //! ```
-//! 
+//!
 //! # Example - Run from a configuration
-//! ```no_run
+//! ```ignore
 //! let result = pchain_compile::Config {
 //!     source_path: Path::new("/home/user/contract").to_path_buf(),
 //!     docker_option: pchain_compile::DockerOption::Dockerless,

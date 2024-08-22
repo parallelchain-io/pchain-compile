@@ -36,8 +36,7 @@ use crate::error::Error;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 
 /// List of docker image tags that can be used. The first (0-indexed) is the default one.
-pub(crate) const PCHAIN_COMPILE_IMAGE_TAGS: [&str; 3] =
-    [env!("CARGO_PKG_VERSION"), "0.4.2", "mainnet01"];
+pub(crate) const PCHAIN_COMPILE_IMAGE_TAGS: [&str; 4] = ["latest", "0.4.3", "0.4.2", "mainnet01"];
 /// The repo name in Parallelchain Lab Dockerhub: https://hub.docker.com/r/parallelchainlab/pchain_compile
 pub(crate) const PCHAIN_COMPILE_IMAGE: &str = "parallelchainlab/pchain_compile";
 const DOCKER_EXEC_TIME_LIMIT: u64 = 15; // secs. It is a time limit to normal docker execution (except cargo build).
@@ -126,7 +125,8 @@ pub async fn copy_files(
     let src_path = Path::new(source_path).to_path_buf();
     let dst_path = Path::new(
         format!(
-            "/tmp/{}-{}.tar.gz",
+            "{}/{}-{}.tar.gz",
+            std::env::temp_dir().to_str().unwrap(),
             container_name,
             src_path.file_name().unwrap().to_str().unwrap()
         )
