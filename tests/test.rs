@@ -5,9 +5,11 @@
 
 //! Basic tests to demonstrate common usage of pchain_compile.
 
+use assert_cmd::assert::OutputAssertExt;
+use pchain_compile::{BuildOptions, DockerConfig, DockerOption};
+use std::fs;
 use std::path::Path;
-
-use pchain_compile::{DockerOption, BuildOptions, DockerConfig};
+use std::process::Command;
 
 #[tokio::test]
 async fn build_contract() {
@@ -94,7 +96,7 @@ async fn build_contract_without_docker() {
         build_options: BuildOptions { locked: true },
         docker_option: DockerOption::Dockerless,
     }
-    .run() 
+    .run()
     .await;
 
     let wasm_name = match run_result {
@@ -108,4 +110,91 @@ async fn build_contract_without_docker() {
     assert!(destination_path.join("Cargo.lock").exists());
     let _ = std::fs::remove_file(destination_path.join(&wasm_name));
     assert_eq!(wasm_name, "hello_contract.wasm");
+}
+
+#[test]
+fn build_from_command_line_with_docker() {
+    let source_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("contracts")
+        .join("hello_contract")
+        .to_path_buf();
+    Command::new("pchain_compile")
+        .args(&["build", "--source", source_path.to_str().unwrap()])
+        .assert()
+        .success();
+    let ret = fs::read_dir(env!("CARGO_MANIFEST_DIR"))
+        .unwrap()
+        .filter(|element| {
+            let entry = element.as_ref().unwrap();
+            let file_type = entry.file_type().unwrap();
+            let file_name = entry.file_name();
+            file_type.is_file() && file_name.eq_ignore_ascii_case("hello_contract.wasm")
+        })
+        .count();
+    assert_eq!(ret, 1);
+    let wasm_file_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("hello_contract.wasm");
+    let _ = std::fs::remove_file(wasm_file_path);
+}
+
+#[test]
+fn build_from_command_line_without_docker() {
+    let source_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("contracts")
+        .join("hello_contract")
+        .to_path_buf();
+    Command::new("pchain_compile")
+        .args(&[
+            "build",
+            "--source",
+            source_path.to_str().unwrap(),
+            "--dockerless",
+        ])
+        .assert()
+        .success();
+    let ret = fs::read_dir(env!("CARGO_MANIFEST_DIR"))
+        .unwrap()
+        .filter(|element| {
+            let entry = element.as_ref().unwrap();
+            let file_type = entry.file_type().unwrap();
+            let file_name = entry.file_name();
+            file_type.is_file() && file_name.eq_ignore_ascii_case("hello_contract.wasm")
+        })
+        .count();
+    assert_eq!(ret, 1);
+    let wasm_file_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("hello_contract.wasm");
+    let _ = std::fs::remove_file(wasm_file_path);
+}
+
+#[test]
+fn build_inside_contract_dir_with_docker() {
+    let source_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("contracts")
+        .join("hello_contract")
+        .to_path_buf();
+    Command::new("pchain_compile")
+        .args(&[
+            "build",
+            "--source",
+            source_path.to_str().unwrap(),
+            "--log-level",
+            "Debug",
+        ])
+        .current_dir(source_path.to_str().unwrap())
+        .assert()
+        .success();
+    let ret = fs::read_dir(&source_path)
+        .unwrap()
+        .filter(|element| {
+            let entry = element.as_ref().unwrap();
+            let file_type = entry.file_type().unwrap();
+            let file_name = entry.file_name();
+            file_type.is_file() && file_name.eq_ignore_ascii_case("hello_contract.wasm")
+        })
+        .count();
+    assert_eq!(ret, 1);
+    let wasm_file_path = source_path.join("hello_contract.wasm").to_path_buf();
+    let _ = std::fs::remove_file(wasm_file_path);
 }

@@ -58,7 +58,7 @@ Finished compiling. ParallelChain Mainnet smart contract(s) ["contract.wasm"] ar
 
 To understand more about the commands and arguments, run `pchain_compile build --help`.
 
-## Using The `pchain_compile` Docker Image
+## Compile with Docker (default)
 
 `pchain_compile` pulls a docker image from ParallelChain Lab's official DockerHub [repository](https://hub.docker.com/r/parallelchainlab/pchain_compile) for the build process. The docker image provides an environment with installed components:
 - rustc: compiler for Rust.
@@ -81,3 +81,9 @@ pchain_compile build --source /home/user/contract --destination /home/user/resul
 ```
 
 If **use-docker-tag** is not used, will pull the docker image with tag `latest`.
+
+## Compile without Docker
+Run `pchain_compile` with the argument **dockerless** will compile smart contract without docker. User needs to make sure **wasm32-unknown-unknown** has already been installed to the active rust tool chain.
+For linux user: 
+1. Run `rustup target install wasm32-unknown-unknown` to install **wasm32-unknown-unknown**
+2. Run `rustup show` to check if **wasm32-unknown-unknown** been installed to acitve toolchain succesfully or not
